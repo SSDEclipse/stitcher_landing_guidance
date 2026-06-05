@@ -127,7 +127,7 @@ def generate_position_set(pos_x, pos_y, pos_z):
 
 def generate_phase_1_nodes(initial_r):
 
-    sampled_time_array = np.linspace(0.0, 10, 5)
+    sampled_time_array = np.linspace(0.1, 10, 10)
     sampled_position_x_array = np.linspace(0, initial_r[0], 5)
     sampled_position_y_array = np.linspace(0, initial_r[1], 5)
     sampled_position_z_array = np.linspace(0, initial_r[2], 5)
@@ -141,7 +141,7 @@ def generate_phase_1_nodes(initial_r):
 
 def generate_phase_2_nodes(initial_r):
 
-    sampled_time_array = np.linspace(0.1, 10, 5)
+    sampled_time_array = np.linspace(0.1, 10, 10)
     sampled_position_x_array = np.linspace(0, initial_r[0], 5)
     sampled_position_y_array = np.linspace(0, initial_r[1], 5)
     sampled_position_z_array = np.linspace(0, initial_r[2], 5)
@@ -155,7 +155,7 @@ def generate_phase_2_nodes(initial_r):
 
 def generate_phase_3_nodes(target_r, target_v):
 
-    sampled_time_array = np.linspace(0.1, 10, 5)
+    sampled_time_array = np.linspace(0.1, 10, 10)
 
     phase_3_nodes = []
     for time in sampled_time_array:
@@ -173,7 +173,7 @@ def prune_edges(input_mass_array, thrust_lower_bound, thrust_upper_bound, input_
         # check all constraints here
         if not edge.check_const_accel_thrust_bounds(input_mass_array[edg_idx], thrust_lower_bound, thrust_upper_bound):
             prune_edge_flag = True
-        # elif ...
+        # elif other constraints...
 
         if prune_edge_flag:
             input_edges.remove(edge)
@@ -182,12 +182,11 @@ def prune_edges(input_mass_array, thrust_lower_bound, thrust_upper_bound, input_
             elif mode == 'backward':
                 edge.parent_node.target_edges.remove(edge)
 
-            if not input_nodes == None:
-                if len(edge.target_node.parent_edges) == 0:
-                    if mode == 'forward':
-                        input_nodes.remove(edge.target_node)
-                    elif mode == 'backward':
-                        input_nodes.remove(edge.parent_node)
+            if len(edge.target_node.parent_edges) == 0:
+                if mode == 'forward':
+                    input_nodes.remove(edge.target_node)
+                elif mode == 'backward':
+                    input_nodes.remove(edge.parent_node)
 
 def compute_edge_costs(v_e, input_edges):
     for edge in input_edges:
@@ -214,9 +213,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
         start_edge.compute_const_accel_mass_consumed(vehicle.wet_mass, vehicle.v_e)
 
     # prune phase 1 edges and nodes that violate constraints
-    print(len(phase_1_nodes))
     prune_edges([vehicle.wet_mass]*len(start_node.target_edges), vehicle.min_thrust, vehicle.max_thrust, start_node.target_edges, 'forward', phase_1_nodes)
-    print(len(phase_1_nodes))
     # create phase 3 nodes
     phase_3_nodes = generate_phase_3_nodes(final_r, final_v)
 
@@ -228,7 +225,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
         for phase_3_node in phase_3_nodes:
             phase_2_node.create_and_append_constant_accel_edge(phase_3_node, mode='backward')
 
-    # prune phase 3 edges that violate constraints
+    # prune phase 3 edges that violate constraints based on worst case mass
     for phase_3_node in phase_3_nodes:
         prune_edges([vehicle.dry_mass]*len(phase_3_node.parent_edges), vehicle.min_thrust, vehicle.max_thrust, phase_3_node.parent_edges, 'backward', phase_2_nodes)
 
@@ -238,26 +235,57 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
             phase_1_node.create_and_append_constant_accel_edge(phase_2_node, mode='forward')
 
 
-
-
-
     # compute costs of phase 2 edges
-    counter = 0
     for phase_1_node in phase_1_nodes:
         for edg_idx in range(len(phase_1_node.target_edges)):
             phase_1_node.target_edges[edg_idx].compute_const_accel_mass_consumed(phase_1_node.parent_edges[0].end_mass, vehicle.v_e)
-            counter += 1
-    print(counter)
+
 
     # compute costs of phase 3 edges
-    counter = 0
     for phase_2_node in phase_2_nodes:
         for edg_idx in range(len(phase_2_node.target_edges)):
             phase_2_node.target_edges[edg_idx].compute_const_accel_mass_consumed(phase_2_node.parent_edges[edg_idx].end_mass, vehicle.v_e)
-            counter += 1
-    print(counter)
 
+
+    # prune phase 2 edges that violate constraints
+    for phase_1_node in phase_1_nodes:
+        prune_edges([phase_1_node.parent_edges[0].end_mass]*len(phase_1_node.target_edges), vehicle.min_thrust, vehicle.max_thrust, phase_1_node.target_edges, 'forward', phase_2_nodes)
     
+    
+    # reprune phase 3 edges that violate constraints based on actual mass
+    for phase_2_node in phase_2_nodes:
+        phase_2_pruning_mass_array = []
+        for mass_idx in range(len(phase_2_node.target_edges)):
+            phase_2_pruning_mass_array.append(phase_2_node.parent_edges[mass_idx].end_mass)
+        prune_edges(phase_2_pruning_mass_array, vehicle.min_thrust, vehicle.max_thrust, phase_2_node.target_edges, 'forward', phase_3_nodes)
+
+    counter = 0
+
+    best_mass = 0.0
+    end_masses = []
+
+    for phase_1_edge in start_node.target_edges:
+        phase_2_edges = phase_1_edge.target_node.target_edges
+        # print(len(phase_2_edges))
+        for phase_2_edge in phase_2_edges:
+            phase_3_edges = phase_2_edge.target_node.target_edges
+            # print(len(phase_3_edges))
+            for phase_3_edge in phase_3_edges:
+                counter += 1
+                end_masses.append(phase_3_edge.end_mass)
+    
+    # end_masses = []
+    # for phase_2_node in phase_2_nodes:
+    #     for edge in phase_2_node.target_edges:
+    #         end_masses.append(edge.end_mass)
+
+                
+    
+    print(counter)
+    print(sum(end_masses)/len(end_masses))
+    print(max(end_masses))
+    print(min(end_masses))
+    print(len(end_masses))
 
 
 
@@ -279,4 +307,4 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-generate_stitcher_trajectory_constant_accel(lander, np.array([100.0, 0.0, 0.0]), np.array([-10.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]))
+generate_stitcher_trajectory_constant_accel(lander, np.array([1000.0, 100.0, 0.0]), np.array([-100.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]))

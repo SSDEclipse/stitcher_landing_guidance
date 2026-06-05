@@ -8,25 +8,50 @@ from scipy.spatial.transform import Rotation as R
 # =============================================================================
 # Define the time horizon and discretization
 # =============================================================================
-T = 57.0  # Time horizon
-N = 100    # Number of discretization points
+# T = 57.0  # Time horizon
+# N = 100    # Number of discretization points
+# dt = T / (N - 1)  # Time step
+
+# r0 = np.array([[2400.0], [450.0], [-330.0]])
+# v0 = np.array([[-10.0], [-40.0], [10.0]])
+# rf = np.array([[0.0], [0.0], [0.0]])
+# vf = np.array([[0.0], [0.0], [0.0]])
+
+# m_wet = 2000.0  # mass, kg
+# m_dry = 1700.0
+# g = np.array([[3.7114], [0.0], [0.0]])
+# T_max_thrust = 24000.0
+# T_max = 0.8 * T_max_thrust  # max thrust force, N
+# T_min = 0.2 * T_max_thrust  # min thrust force, N
+# Isp = 1.0 / (9.80665 * 5 * 10**-4)
+# alpha = 1.0 / (9.80665 * Isp)
+# thrust_max_angle = 45.0 * np.pi / 180.0     # max vehicle tilt, rad
+# glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
+
+
+
+T = 13.9  # Time horizon
+N = 250    # Number of discretization points
 dt = T / (N - 1)  # Time step
 
-r0 = np.array([[2400.0], [450.0], [-330.0]])
-v0 = np.array([[-10.0], [-40.0], [10.0]])
+r0 = np.array([[100.0], [100.0], [0.0]])
+v0 = np.array([[-10.0], [0.0], [0.0]])
 rf = np.array([[0.0], [0.0], [0.0]])
 vf = np.array([[0.0], [0.0], [0.0]])
 
 m_wet = 2000.0  # mass, kg
-m_dry = 1700.0
-g = np.array([[3.7114], [0.0], [0.0]])
-T_max_thrust = 24000.0
-T_max = 0.8 * T_max_thrust  # max thrust force, N
-T_min = 0.2 * T_max_thrust  # min thrust force, N
-Isp = 1.0 / (9.80665 * 5 * 10**-4)
+m_dry = 1000.0
+g = np.array([[3.7278], [0.0], [0.0]])
+T_max_thrust = 10000
+T_max = 10000  # max thrust force, N
+T_min = 3000  # min thrust force, N
+Isp = 300.0
 alpha = 1.0 / (9.80665 * Isp)
-thrust_max_angle = 45.0 * np.pi / 180.0     # max vehicle tilt, rad
+thrust_max_angle = 90.0 * np.pi / 180.0     # max vehicle tilt, rad
 glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
+
+
+
 
 
 
@@ -80,8 +105,10 @@ for k in range(N):
     
     if k < N - 1:
         # Trapezoidal integration for dynamics
-        constraints.append(x[3:6, k+1:k+2] == x[3:6, k:k+1] + dt/2.0 * ((u[:, k:k+1] - g) + (u[:, k+1:k+2] - g)))
-        constraints.append(x[0:3, k+1:k+2] == x[0:3, k:k+1] + dt/2.0 * (x[3:6, k:k+1] + x[3:6, k+1:k+2]))
+        # constraints.append(x[3:6, k+1:k+2] == x[3:6, k:k+1] + dt/2.0 * ((u[:, k:k+1] - g) + (u[:, k+1:k+2] - g)))
+        # constraints.append(x[0:3, k+1:k+2] == x[0:3, k:k+1] + dt/2.0 * (x[3:6, k:k+1] + x[3:6, k+1:k+2]))
+        constraints.append(x[3:6, k+1:k+2] == x[3:6, k:k+1] + dt * ((u[:, k:k+1] - g)))
+        constraints.append(x[0:3, k+1:k+2] == x[0:3, k:k+1] + dt * (x[3:6, k:k+1]))
         constraints.append(z[0, k+1] == z[0, k] - (alpha * dt * sigma[0, k]))
     
     # State mass bounds
