@@ -163,20 +163,8 @@ def generate_phase_3_nodes(target_r, target_v):
     return phase_3_nodes
 
 
-def prune_edges(input_mass_array, thrust_lower_bound, thrust_upper_bound, input_edges, input_nodes=None):
+def prune_edges(input_mass_array, thrust_lower_bound, thrust_upper_bound, input_edges, mode, input_nodes=None):
 
-    # for edge in input_edges[:]:
-    #     prune_edge_flag = False
-
-    #     # check all constraints here
-    #     if not edge.check_const_accel_thrust_bounds(input_mass, thrust_lower_bound, thrust_upper_bound):
-    #         prune_edge_flag = True
-    #     # elif ...
-
-    #     if prune_edge_flag:
-    #         input_edges.remove(edge)
-    #         if not input_nodes == None:
-    #             input_nodes.remove(edge.target_node)
     input_edges_copy = input_edges[:]
     for edg_idx in range(len(input_edges_copy)):
         edge = input_edges_copy[edg_idx]
@@ -189,8 +177,17 @@ def prune_edges(input_mass_array, thrust_lower_bound, thrust_upper_bound, input_
 
         if prune_edge_flag:
             input_edges.remove(edge)
+            if mode == 'forward':
+                edge.target_node.parent_edges.remove(edge)
+            elif mode == 'backward':
+                edge.parent_node.target_edges.remove(edge)
+
             if not input_nodes == None:
-                input_nodes.remove(edge.target_node)
+                if len(edge.target_node.parent_edges) == 0:
+                    if mode == 'forward':
+                        input_nodes.remove(edge.target_node)
+                    elif mode == 'backward':
+                        input_nodes.remove(edge.parent_node)
 
 def compute_edge_costs(v_e, input_edges):
     for edge in input_edges:
@@ -217,8 +214,9 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
         start_edge.compute_const_accel_mass_consumed(vehicle.wet_mass, vehicle.v_e)
 
     # prune phase 1 edges and nodes that violate constraints
-    prune_edges([vehicle.wet_mass]*len(start_node.target_edges), vehicle.min_thrust, vehicle.max_thrust, start_node.target_edges, phase_1_nodes)
-    
+    print(len(phase_1_nodes))
+    prune_edges([vehicle.wet_mass]*len(start_node.target_edges), vehicle.min_thrust, vehicle.max_thrust, start_node.target_edges, 'forward', phase_1_nodes)
+    print(len(phase_1_nodes))
     # create phase 3 nodes
     phase_3_nodes = generate_phase_3_nodes(final_r, final_v)
 
@@ -229,6 +227,10 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
     for phase_2_node in phase_2_nodes:
         for phase_3_node in phase_3_nodes:
             phase_2_node.create_and_append_constant_accel_edge(phase_3_node, mode='backward')
+
+    # prune phase 3 edges that violate constraints
+    for phase_3_node in phase_3_nodes:
+        prune_edges([vehicle.dry_mass]*len(phase_3_node.parent_edges), vehicle.min_thrust, vehicle.max_thrust, phase_3_node.parent_edges, 'backward', phase_2_nodes)
 
     # connect phase 1 and phase 2 nodes with edges
     for phase_1_node in phase_1_nodes:
