@@ -3,6 +3,7 @@ import orbital_conversions
 import orbital_dynamics
 import cartesian_dynamics
 import planetary_body_config
+import matplotlib.pyplot as plt
 
 
 class Vehicle:
@@ -16,9 +17,9 @@ class Vehicle:
 
 
 class Node:
-    def __init__(self, position_array, velocity_array, time):
-        self.position = position_array
-        self.velocity = velocity_array
+    def __init__(self, position, velocity, time):
+        self.position = position
+        self.velocity = velocity
         self.time = time
         self.target_edges = []
         self.parent_edges = []
@@ -51,7 +52,6 @@ class Node:
             return new_edge
         
         elif mode == 'backward':
-            t_f = target_node.time
             t_f = target_node.time
             if t_f == 0:
                 c_0_array = np.array([0.0, 0.0, 0.0])
@@ -255,6 +255,8 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
     # reprune phase 3 edges that violate constraints based on actual mass
     for phase_2_node in phase_2_nodes:
         phase_2_pruning_mass_array = []
+        if len(phase_2_node.target_edges) != len(phase_2_node.parent_edges):
+            print(len(phase_2_node.target_edges), len(phase_2_node.parent_edges))
         for mass_idx in range(len(phase_2_node.target_edges)):
             phase_2_pruning_mass_array.append(phase_2_node.parent_edges[mass_idx].end_mass)
         prune_edges(phase_2_pruning_mass_array, vehicle.min_thrust, vehicle.max_thrust, phase_2_node.target_edges, 'forward', phase_3_nodes)
@@ -272,6 +274,15 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
             # print(len(phase_3_edges))
             for phase_3_edge in phase_3_edges:
                 counter += 1
+                end_mass = phase_3_edge.end_mass
+                if end_mass > best_mass:
+                    optimal_node_1 = phase_1_edge.target_node
+                    optimal_node_2 = phase_2_edge.target_node
+                    optimal_node_3 = phase_3_edge.target_node
+                    optimal_edge_1 = phase_1_edge
+                    optimal_edge_2 = phase_2_edge
+                    optimal_edge_3 = phase_3_edge
+                    best_mass = end_mass
                 end_masses.append(phase_3_edge.end_mass)
     
     # end_masses = []
@@ -288,23 +299,25 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
     print(len(end_masses))
 
 
+    print('Optimal times:')
+    print(optimal_node_1.time, optimal_node_2.time, optimal_node_3.time)
+    print('Optimal positions:')
+    print(optimal_node_1.position, optimal_node_2.position, optimal_node_3.position)
+    print('Optimal velocities:')
+    print(optimal_node_1.velocity, optimal_node_2.velocity, optimal_node_3.velocity)
+    print('Optimal accels:')
+    print(optimal_edge_1.c0_array, optimal_edge_2.c0_array, optimal_edge_3.c0_array)
+    print(np.linalg.norm(optimal_edge_1.c0_array), np.linalg.norm(optimal_edge_2.c0_array), np.linalg.norm(optimal_edge_3.c0_array))
+    print('Optimal mass consumed:')
+    print(optimal_edge_1.mass_consumed, optimal_edge_2.mass_consumed, optimal_edge_3.mass_consumed)
+
+    bins = np.linspace(1900, 1980, 100)
+    plt.hist(end_masses, bins=bins)
+    plt.show()
 
 
-# sampled_velocity_zenith_array = generate_discrete_set(np.pi/2, np.pi, 20)
-# sampled_velocity_azimuth_array = generate_discrete_set(0, 2*np.pi, 30)
-# sampled_velocity_magnitude_array = generate_discrete_set(0, 100, 20)
-# sampled_position_x_array = generate_discrete_set(0, 100, 20)
-# sampled_position_y_array = generate_discrete_set(0, 100, 20)
-# sampled_position_z_array = generate_discrete_set(0, 100, 20)
-# sampled_velocities_array = generate_velocity_set(sampled_velocity_zenith_array, sampled_velocity_azimuth_array, sampled_velocity_magnitude_array)
-# sampled_positions_array = generate_position_set(sampled_position_x_array, sampled_position_y_array, sampled_position_z_array)
-
-# print(np.shape(sampled_positions_array))
-# print(1000*1000*20 / 1000000.0)
-# for i in range(100000000):
-#     test = 219586**22.1 + 230486*3409723 / 23047.987
 
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-generate_stitcher_trajectory_constant_accel(lander, np.array([1000.0, 100.0, 0.0]), np.array([-100.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]))
+generate_stitcher_trajectory_constant_accel(lander, np.array([100.0, 100.0, 0.0]), np.array([-10.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]))
