@@ -30,12 +30,12 @@ from scipy.spatial.transform import Rotation as R
 
 
 
-T = 13.9  # Time horizon
+T = 11.0  # Time horizon
 N = 250    # Number of discretization points
 dt = T / (N - 1)  # Time step
 
-r0 = np.array([[100.0], [0.0], [0.0]])
-v0 = np.array([[-10.0], [0.0], [0.0]])
+r0 = np.array([[50.0], [0.0], [0.0]])
+v0 = np.array([[-5.0], [0.0], [0.0]])
 rf = np.array([[0.0], [0.0], [0.0]])
 vf = np.array([[0.0], [0.0], [0.0]])
 
