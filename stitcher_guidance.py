@@ -178,8 +178,8 @@ def generate_position_set(pos_x, pos_y, pos_z):
 
 def generate_phase_1_nodes(initial_r):
 
-    sampled_time_array = np.linspace(0.1, 10, 10)
-    sampled_position_x_array = np.linspace(0.67*initial_r[0], initial_r[0], 5)
+    sampled_time_array = np.linspace(0.1, 20, 10)
+    sampled_position_x_array = np.linspace(0.51*initial_r[0], initial_r[0], 5)
     sampled_position_y_array = np.linspace(0, initial_r[1], 5)
     sampled_position_z_array = np.linspace(0, initial_r[2], 5)
     sampled_positions_array = generate_position_set(sampled_position_x_array, sampled_position_y_array, sampled_position_z_array)
@@ -192,8 +192,8 @@ def generate_phase_1_nodes(initial_r):
 
 def generate_phase_2_nodes(initial_r):
 
-    sampled_time_array = np.linspace(0.1, 10, 10)
-    sampled_position_x_array = np.linspace(0.34*initial_r[0], 0.66*initial_r[0], 5)
+    sampled_time_array = np.linspace(0.1, 20, 10)
+    sampled_position_x_array = np.linspace(0.01*initial_r[0], 0.50*initial_r[0], 5)
     sampled_position_y_array = np.linspace(0, initial_r[1], 5)
     sampled_position_z_array = np.linspace(0, initial_r[2], 5)
     sampled_positions_array = generate_position_set(sampled_position_x_array, sampled_position_y_array, sampled_position_z_array)
@@ -334,19 +334,24 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
         if len(phase_2_node.target_edges) != 1:
             print(len(phase_2_node.target_edges))
             raise ValueError
-    print(len(phase_3_nodes[0].parent_edges))   
-        
+
+
+    total_edges = 0
+    for phase_1_node in phase_1_nodes:
+        for phase_2_edge in phase_1_node.target_edges:
+            total_edges += 1
+
 
     end_masses = []
     best_mass = 0.0
-    counter = 0
+    total_valid_edges = 0
     for phase_2_node in phase_2_nodes:
         for parent_edge in phase_2_node.parent_edges:
             current_edge_start_mass = parent_edge.end_mass
             for target_edge in phase_2_node.target_edges: # should only be 1 p2 target edge
                 if target_edge.check_const_accel_thrust_bounds(current_edge_start_mass, vehicle.min_thrust, vehicle.max_thrust):
                     target_edge.compute_const_accel_mass_consumed(current_edge_start_mass, vehicle.v_e)
-                    counter += 1
+                    total_valid_edges += 1
                     touchdown_mass = target_edge.end_mass
                     end_masses.append(touchdown_mass)
                     if touchdown_mass > best_mass:
@@ -357,7 +362,8 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
                         optimal_edge_3 = target_edge
                         optimal_edge_2 = parent_edge
                         optimal_edge_1 = optimal_node_1.parent_edges[0]
-    print(counter)
+    print(total_valid_edges)
+    print(total_valid_edges/total_edges)
 
 
 
@@ -414,7 +420,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
     print('Optimal mass consumed:')
     print(optimal_edge_1.mass_consumed, optimal_edge_2.mass_consumed, optimal_edge_3.mass_consumed)
 
-    bins = np.linspace(1900, 1980, 100)
+    bins = np.linspace(1900, 2000, 100)
     plt.hist(end_masses, bins=bins)
     plt.show()
 
@@ -423,4 +429,4 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-generate_stitcher_trajectory_constant_accel(lander, np.array([50.0, 0.0, 0.0]), np.array([-5.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]))
+generate_stitcher_trajectory_constant_accel(lander, np.array([200.0, 0.0, 0.0]), np.array([-19.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]))

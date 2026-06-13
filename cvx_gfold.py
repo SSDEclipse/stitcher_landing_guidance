@@ -30,12 +30,12 @@ from scipy.spatial.transform import Rotation as R
 
 
 
-T = 11.0  # Time horizon
-N = 250    # Number of discretization points
+T = 20.0  # Time horizon
+N = 50    # Number of discretization points
 dt = T / (N - 1)  # Time step
 
-r0 = np.array([[50.0], [0.0], [0.0]])
-v0 = np.array([[-5.0], [0.0], [0.0]])
+r0 = np.array([[200.0], [0.0], [0.0]])
+v0 = np.array([[-18.0], [0.0], [0.0]])
 rf = np.array([[0.0], [0.0], [0.0]])
 vf = np.array([[0.0], [0.0], [0.0]])
 
@@ -105,12 +105,14 @@ for k in range(N):
     
     if k < N - 1:
         # Trapezoidal integration for dynamics
-        # constraints.append(x[3:6, k+1:k+2] == x[3:6, k:k+1] + dt/2.0 * ((u[:, k:k+1] - g) + (u[:, k+1:k+2] - g)))
-        # constraints.append(x[0:3, k+1:k+2] == x[0:3, k:k+1] + dt/2.0 * (x[3:6, k:k+1] + x[3:6, k+1:k+2]))
-        constraints.append(x[3:6, k+1:k+2] == x[3:6, k:k+1] + dt * ((u[:, k:k+1] - g)))
-        constraints.append(x[0:3, k+1:k+2] == x[0:3, k:k+1] + dt * (x[3:6, k:k+1]))
+        constraints.append(x[3:6, k+1:k+2] == x[3:6, k:k+1] + dt/2.0 * ((u[:, k:k+1] - g) + (u[:, k+1:k+2] - g)))
+        constraints.append(x[0:3, k+1:k+2] == x[0:3, k:k+1] + dt/2.0 * (x[3:6, k:k+1] + x[3:6, k+1:k+2]))
+        # constraints.append(x[3:6, k+1:k+2] == x[3:6, k:k+1] + dt * ((u[:, k:k+1] - g)))
+        # constraints.append(x[0:3, k+1:k+2] == x[0:3, k:k+1] + dt * (x[3:6, k:k+1]))
         constraints.append(z[0, k+1] == z[0, k] - (alpha * dt * sigma[0, k]))
     
+    constraints.append(x[0, k] >= 0.0)
+
     # State mass bounds
     constraints.append(z[0, k] >= np.log(m_wet - alpha * T_max * (k) * dt))
     constraints.append(z[0, k] <= np.log(m_wet - alpha * T_min * (k) * dt))
