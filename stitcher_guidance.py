@@ -164,6 +164,11 @@ class Edge:
         return True
 
 
+class SampledSet:
+    def __init__(self, lower_bound, upper_bound, num_points):
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+        self.num_points = num_points
 
 
 
@@ -176,12 +181,12 @@ def generate_position_set(pos_x, pos_y, pos_z):
     output = np.asarray(output)
     return output
 
-def generate_phase_1_nodes(initial_r):
+def generate_phase_1_nodes(time_sampled_set, pos_x_sampled_set, pos_y_sampled_set, pos_z_sampled_set):
 
-    sampled_time_array = np.linspace(0.1, 20, 10)
-    sampled_position_x_array = np.linspace(0.51*initial_r[0], initial_r[0], 5)
-    sampled_position_y_array = np.linspace(0, initial_r[1], 5)
-    sampled_position_z_array = np.linspace(0, initial_r[2], 5)
+    sampled_time_array = np.linspace(time_sampled_set.lower_bound, time_sampled_set.upper_bound, time_sampled_set.num_points)
+    sampled_position_x_array = np.linspace(pos_x_sampled_set.lower_bound, pos_x_sampled_set.upper_bound, pos_x_sampled_set.num_points)
+    sampled_position_y_array = np.linspace(pos_y_sampled_set.lower_bound, pos_y_sampled_set.upper_bound, pos_y_sampled_set.num_points)
+    sampled_position_z_array = np.linspace(pos_z_sampled_set.lower_bound, pos_z_sampled_set.upper_bound, pos_z_sampled_set.num_points)
     sampled_positions_array = generate_position_set(sampled_position_x_array, sampled_position_y_array, sampled_position_z_array)
 
     phase_1_nodes = []
@@ -190,12 +195,12 @@ def generate_phase_1_nodes(initial_r):
             phase_1_nodes.append(P1Node(pos, None, time))
     return phase_1_nodes
 
-def generate_phase_2_nodes(initial_r):
+def generate_phase_2_nodes(time_sampled_set, pos_x_sampled_set, pos_y_sampled_set, pos_z_sampled_set):
 
-    sampled_time_array = np.linspace(0.1, 20, 10)
-    sampled_position_x_array = np.linspace(0.01*initial_r[0], 0.50*initial_r[0], 5)
-    sampled_position_y_array = np.linspace(0, initial_r[1], 5)
-    sampled_position_z_array = np.linspace(0, initial_r[2], 5)
+    sampled_time_array = np.linspace(time_sampled_set.lower_bound, time_sampled_set.upper_bound, time_sampled_set.num_points)
+    sampled_position_x_array = np.linspace(pos_x_sampled_set.lower_bound, pos_x_sampled_set.upper_bound, pos_x_sampled_set.num_points)
+    sampled_position_y_array = np.linspace(pos_y_sampled_set.lower_bound, pos_y_sampled_set.upper_bound, pos_y_sampled_set.num_points)
+    sampled_position_z_array = np.linspace(pos_z_sampled_set.lower_bound, pos_z_sampled_set.upper_bound, pos_z_sampled_set.num_points)
     sampled_positions_array = generate_position_set(sampled_position_x_array, sampled_position_y_array, sampled_position_z_array)
 
     phase_2_nodes = []
@@ -259,15 +264,13 @@ def compute_edge_costs(v_e, input_edges):
 
 
 
-
-
-def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, final_r, final_v):
+def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, final_r, final_v, p1_sampled_set_dict, p2_sampled_set_dict):
 
     start_node = StartNode(initial_r, initial_v, 0.0)
 
     # create phase 1 nodes
 
-    phase_1_nodes = generate_phase_1_nodes(initial_r)
+    phase_1_nodes = generate_phase_1_nodes(p1_sampled_set_dict['time'], p1_sampled_set_dict['pos_x'], p1_sampled_set_dict['pos_y'], p1_sampled_set_dict['pos_z'])
 
     # connect start and phase 1 nodes with edges
     for phase_1_node in phase_1_nodes:
@@ -284,7 +287,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
     phase_3_nodes = generate_phase_3_nodes(final_r, final_v)
 
     # create phase 2 nodes
-    phase_2_nodes = generate_phase_2_nodes(initial_r)
+    phase_2_nodes = generate_phase_2_nodes(p2_sampled_set_dict['time'], p2_sampled_set_dict['pos_x'], p2_sampled_set_dict['pos_y'], p2_sampled_set_dict['pos_z'])
 
 
     # connect phase 3 and phase 2 nodes with edges
@@ -369,39 +372,6 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
 
 
 
-
-    # counter = 0
-
-    # best_mass = 0.0
-    # end_masses = []
-
-    # for phase_1_edge in start_node.target_edges:
-    #     phase_2_edges = phase_1_edge.target_node.target_edges
-    #     # print(len(phase_2_edges))
-    #     for phase_2_edge in phase_2_edges:
-    #         phase_3_edges = phase_2_edge.target_node.target_edges
-    #         # print(len(phase_3_edges))
-    #         for phase_3_edge in phase_3_edges:
-    #             counter += 1
-    #             end_mass = phase_3_edge.end_mass
-    #             if end_mass > best_mass:
-    #                 optimal_node_1 = phase_1_edge.target_node
-    #                 optimal_node_2 = phase_2_edge.target_node
-    #                 optimal_node_3 = phase_3_edge.target_node
-    #                 optimal_edge_1 = phase_1_edge
-    #                 optimal_edge_2 = phase_2_edge
-    #                 optimal_edge_3 = phase_3_edge
-    #                 best_mass = end_mass
-    #             end_masses.append(phase_3_edge.end_mass)
-    
-    # end_masses = []
-    # for phase_2_node in phase_2_nodes:
-    #     for edge in phase_2_node.target_edges:
-    #         end_masses.append(edge.end_mass)
-
-                
-    
-    # print(counter)
     print(sum(end_masses)/len(end_masses))
     print(max(end_masses))
     print(min(end_masses))
@@ -425,8 +395,33 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
     plt.show()
 
 
-
+initial_r = np.array([200.0, 0.0, 0.0])
+initial_v = np.array([-19.0, 0.0, 0.0])
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-generate_stitcher_trajectory_constant_accel(lander, np.array([200.0, 0.0, 0.0]), np.array([-19.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]))
+p1_time_sampled_set = SampledSet(0.1, 20, 10)
+p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 5)
+p1_pos_y_sampled_set = SampledSet(0, initial_r[0], 5)
+p1_pos_z_sampled_set = SampledSet(0, initial_r[0], 5)
+
+p2_time_sampled_set = SampledSet(0.1, 20, 10)
+p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 5)
+p2_pos_y_sampled_set = SampledSet(0, initial_r[0], 5)
+p2_pos_z_sampled_set = SampledSet(0, initial_r[0], 5)
+
+p1_sampled_set_dict = {
+    'time': p1_time_sampled_set,
+    'pos_x': p1_pos_x_sampled_set,
+    'pos_y': p1_pos_y_sampled_set,
+    'pos_z': p1_pos_z_sampled_set
+}
+
+p2_sampled_set_dict = {
+    'time': p2_time_sampled_set,
+    'pos_x': p2_pos_x_sampled_set,
+    'pos_y': p2_pos_y_sampled_set,
+    'pos_z': p2_pos_z_sampled_set
+}
+
+generate_stitcher_trajectory_constant_accel(lander, initial_r, initial_v, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), p1_sampled_set_dict, p2_sampled_set_dict)
