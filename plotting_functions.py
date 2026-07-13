@@ -200,6 +200,11 @@ def plot_3d_data(data_t, data_x, data_y, data_z):
             bgcolor="rgb(250, 250, 250)"
         ),
     )
+    fig.update_layout(
+        scene=dict(
+            aspectmode='data'
+        )
+    )
 
     # Display the final plot
     fig.show()

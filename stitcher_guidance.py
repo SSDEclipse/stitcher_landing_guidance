@@ -91,21 +91,21 @@ class P2Node:
         self.parent_edges = []
     
     
-    def create_and_append_forward_edge(self, target_node):
-        t_f = self.time_to_p3
-        if t_f == 0:
-            c_0_array = np.array([0.0, 0.0, 0.0])
-            v_f = self.velocity
-            target_node.update_node_velocity(v_f)
-        else:
-            c_0_array = 2.0 / t_f**2 * (target_node.position - self.position - self.velocity * t_f)
-            v_f = self.velocity + c_0_array*t_f
-            c_0_array[0] += planetary_body_config.body_surface_gravity
-            target_node.update_node_velocity(v_f)
-        new_edge = Edge(self, target_node, c_0_array, np.array([0.0, 0.0, 0.0]), t_f)
-        self.target_edges.append(new_edge)
-        target_node.parent_edges.append(new_edge)
-        return new_edge
+    # def create_and_append_forward_edge(self, target_node):
+    #     t_f = self.time_to_p3
+    #     if t_f == 0:
+    #         c_0_array = np.array([0.0, 0.0, 0.0])
+    #         v_f = self.velocity
+    #         target_node.update_node_velocity(v_f)
+    #     else:
+    #         c_0_array = 2.0 / t_f**2 * (target_node.position - self.position - self.velocity * t_f)
+    #         v_f = self.velocity + c_0_array*t_f
+    #         c_0_array[0] += planetary_body_config.body_surface_gravity
+    #         target_node.update_node_velocity(v_f)
+    #     new_edge = Edge(self, target_node, c_0_array, np.array([0.0, 0.0, 0.0]), t_f)
+    #     self.target_edges.append(new_edge)
+    #     target_node.parent_edges.append(new_edge)
+    #     return new_edge
     
     def create_and_append_backward_edge(self, target_node):
         t_f = self.time_to_p3
@@ -203,7 +203,7 @@ def get_nearest_array_neighbors(input_array, input_value):
     start_idx = max(0, exact_idx - 1)
     end_idx = min(len(input_array)-1, exact_idx + 1) 
     
-    return input_array[start_idx], input_array[end_idx], len(input_array)
+    return input_array[start_idx], input_array[end_idx]
 
 def generate_position_set(pos_x, pos_y, pos_z):
     output = []
@@ -383,15 +383,16 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, f
                         optimal_edge_1 = copy.copy(optimal_node_1.parent_edges[0])
 
     
-    new_p1_time_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['time'].lower_bound, p1_sampled_set_dict['time'].upper_bound, p1_sampled_set_dict['time'].num_points), optimal_edge_1.t_f))
-    new_p1_pos_x_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['pos_x'].lower_bound, p1_sampled_set_dict['pos_x'].upper_bound, p1_sampled_set_dict['pos_x'].num_points), optimal_node_1.position[0]))
-    new_p1_pos_y_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['pos_y'].lower_bound, p1_sampled_set_dict['pos_y'].upper_bound, p1_sampled_set_dict['pos_y'].num_points), optimal_node_1.position[1]))
-    new_p1_pos_z_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['pos_z'].lower_bound, p1_sampled_set_dict['pos_z'].upper_bound, p1_sampled_set_dict['pos_z'].num_points), optimal_node_1.position[2]))
+    new_p1_time_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['time'].lower_bound, p1_sampled_set_dict['time'].upper_bound, p1_sampled_set_dict['time'].num_points), optimal_edge_1.t_f), 10)
+    new_p1_pos_x_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['pos_x'].lower_bound, p1_sampled_set_dict['pos_x'].upper_bound, p1_sampled_set_dict['pos_x'].num_points), optimal_node_1.position[0]), 3)
+    new_p1_pos_y_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['pos_y'].lower_bound, p1_sampled_set_dict['pos_y'].upper_bound, p1_sampled_set_dict['pos_y'].num_points), optimal_node_1.position[1]), 3)
+    new_p1_pos_z_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['pos_z'].lower_bound, p1_sampled_set_dict['pos_z'].upper_bound, p1_sampled_set_dict['pos_z'].num_points), optimal_node_1.position[2]), 3)
 
-    new_p2_time_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['time'].lower_bound, p2_sampled_set_dict['time'].upper_bound, p2_sampled_set_dict['time'].num_points), optimal_edge_3.t_f))
-    new_p2_pos_x_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['pos_x'].lower_bound, p2_sampled_set_dict['pos_x'].upper_bound, p2_sampled_set_dict['pos_x'].num_points), optimal_node_2.position[0]))
-    new_p2_pos_y_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['pos_y'].lower_bound, p2_sampled_set_dict['pos_y'].upper_bound, p2_sampled_set_dict['pos_y'].num_points), optimal_node_2.position[1]))
-    new_p2_pos_z_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['pos_z'].lower_bound, p2_sampled_set_dict['pos_z'].upper_bound, p2_sampled_set_dict['pos_z'].num_points), optimal_node_2.position[2]))
+    new_p2_time_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['time'].lower_bound, p2_sampled_set_dict['time'].upper_bound, p2_sampled_set_dict['time'].num_points), optimal_edge_3.t_f), 10)
+    new_p2_pos_x_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['pos_x'].lower_bound, p2_sampled_set_dict['pos_x'].upper_bound, p2_sampled_set_dict['pos_x'].num_points), optimal_node_2.position[0]), 3)
+    new_p2_pos_y_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['pos_y'].lower_bound, p2_sampled_set_dict['pos_y'].upper_bound, p2_sampled_set_dict['pos_y'].num_points), optimal_node_2.position[1]), 3)
+    new_p2_pos_z_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['pos_z'].lower_bound, p2_sampled_set_dict['pos_z'].upper_bound, p2_sampled_set_dict['pos_z'].num_points), optimal_node_2.position[2]), 3)
+
 
     new_p1_sampled_set_dict = {
         'time': new_p1_time_sampled_set,
@@ -420,15 +421,15 @@ initial_v = np.array([-10.0, 0.0, 0.0])
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-p1_time_sampled_set = SampledSet(0.1, 20, 10)
-p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 5)
-p1_pos_y_sampled_set = SampledSet(0, 0.0, 5)
-p1_pos_z_sampled_set = SampledSet(0, 0.0, 5)
+p1_time_sampled_set = SampledSet(0.1, 20, 6)
+p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 4)
+p1_pos_y_sampled_set = SampledSet(0, 0.0, 4)
+p1_pos_z_sampled_set = SampledSet(0, 0.0, 4)
 
-p2_time_sampled_set = SampledSet(0.1, 20, 10)
-p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 5)
-p2_pos_y_sampled_set = SampledSet(0, 0.0, 5)
-p2_pos_z_sampled_set = SampledSet(0, 0.0, 5)
+p2_time_sampled_set = SampledSet(0.1, 20, 6)
+p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 4)
+p2_pos_y_sampled_set = SampledSet(0, 0.0, 4)
+p2_pos_z_sampled_set = SampledSet(0, 0.0, 4)
 
 p1_sampled_set_dict = {
     'time': p1_time_sampled_set,
@@ -448,7 +449,7 @@ guidance_output = generate_stitcher_trajectory_constant_accel(lander, initial_r,
 
 guidance_output = generate_stitcher_trajectory_constant_accel(lander, initial_r, initial_v, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict)
 
-# guidance_output = generate_stitcher_trajectory_constant_accel(lander, initial_r, initial_v, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict)
+guidance_output = generate_stitcher_trajectory_constant_accel(lander, initial_r, initial_v, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict)
 
 # guidance_output = generate_stitcher_trajectory_constant_accel(lander, initial_r, initial_v, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict)
 

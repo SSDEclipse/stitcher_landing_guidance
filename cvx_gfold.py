@@ -8,34 +8,34 @@ from scipy.spatial.transform import Rotation as R
 # =============================================================================
 # Define the time horizon and discretization
 # =============================================================================
-# T = 57.0  # Time horizon
-# N = 100    # Number of discretization points
-# dt = T / (N - 1)  # Time step
+T = 57.0  # Time horizon
+N = 100    # Number of discretization points
+dt = T / (N - 1)  # Time step
 
-# r0 = np.array([[2400.0], [450.0], [-330.0]])
-# v0 = np.array([[-10.0], [-40.0], [10.0]])
-# rf = np.array([[0.0], [0.0], [0.0]])
-# vf = np.array([[0.0], [0.0], [0.0]])
+r0 = np.array([[2400.0], [450.0], [-330.0]])
+v0 = np.array([[-10.0], [-40.0], [10.0]])
+rf = np.array([[0.0], [0.0], [0.0]])
+vf = np.array([[0.0], [0.0], [0.0]])
 
-# m_wet = 2000.0  # mass, kg
-# m_dry = 1700.0
-# g = np.array([[3.7114], [0.0], [0.0]])
-# T_max_thrust = 24000.0
-# T_max = 0.8 * T_max_thrust  # max thrust force, N
-# T_min = 0.2 * T_max_thrust  # min thrust force, N
-# Isp = 1.0 / (9.80665 * 5 * 10**-4)
-# alpha = 1.0 / (9.80665 * Isp)
-# thrust_max_angle = 45.0 * np.pi / 180.0     # max vehicle tilt, rad
-# glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
+m_wet = 2000.0  # mass, kg
+m_dry = 1700.0
+g = np.array([[3.7114], [0.0], [0.0]])
+T_max_thrust = 24000.0
+T_max = 0.8 * T_max_thrust  # max thrust force, N
+T_min = 0.2 * T_max_thrust  # min thrust force, N
+Isp = 1.0 / (9.80665 * 5 * 10**-4)
+alpha = 1.0 / (9.80665 * Isp)
+thrust_max_angle = 45.0 * np.pi / 180.0     # max vehicle tilt, rad
+glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
 
 
 
-T = 19.0  # Time horizon
+T = 21.0  # Time horizon
 N = 50    # Number of discretization points
 dt = T / (N - 1)  # Time step
 
-r0 = np.array([[200.0], [0.0], [0.0]])
-v0 = np.array([[-10.0], [0.0], [0.0]])
+r0 = np.array([[200.0], [10.0], [10.0]])
+v0 = np.array([[-10.0], [-3.0], [-2.0]])
 rf = np.array([[0.0], [0.0], [0.0]])
 vf = np.array([[0.0], [0.0], [0.0]])
 

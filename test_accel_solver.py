@@ -104,3 +104,5 @@ r_z_f = 0.5*c_0_z*t_f**2 + 1/6.0 * c_1_z * t_f**3 + v_0[2]*t_f + r_0[2]
 v_x_f = (c_0_x - g)*t_f + 0.5*c_1_x*t_f**2 + v_0[0]
 
 print(r_x_f, r_y_f, r_z_f, v_x_f)
+
+print(np.linspace(0, 10, 4))
