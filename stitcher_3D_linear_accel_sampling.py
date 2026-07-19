@@ -495,10 +495,10 @@ final_a = np.array([1.0, -0.25, 0.0])
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-initial_r = np.array([500.0, 50.0, 0.0])
+initial_r = np.array([500.0, 50.0, 50.0])
 initial_v = np.array([-50.0, -0.0, 0.0])
-initial_a = np.array([-9.8, -8.0, 0.0])
-final_a = np.array([1.0, -0.0, 0.0])
+initial_a = np.array([10.0, -0.0, 0.0])
+final_a = np.array([50.0, 3.0, 0.0])
 
 lander = Vehicle(150000, 100000, 9000000, 1000000, 320)
 
@@ -567,23 +567,55 @@ t_p_1 = np.linspace(0, guidance_output.optimal_edge_1.t_f, 100)
 r_x_p_1 = guidance_output.start_node.position[0] + guidance_output.start_node.velocity[0]*t_p_1 + 0.5*(guidance_output.optimal_edge_1.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_1**2 + 1.0/6.0*guidance_output.optimal_edge_1.c_1_array[0]*t_p_1**3
 r_y_p_1 = guidance_output.start_node.position[1] + guidance_output.start_node.velocity[1]*t_p_1 + 0.5*(guidance_output.optimal_edge_1.c_0_array[1])*t_p_1**2 + 1.0/6.0*guidance_output.optimal_edge_1.c_1_array[1]*t_p_1**3
 r_z_p_1 = guidance_output.start_node.position[2] + guidance_output.start_node.velocity[2]*t_p_1 + 0.5*(guidance_output.optimal_edge_1.c_0_array[2])*t_p_1**2 + 1.0/6.0*guidance_output.optimal_edge_1.c_1_array[2]*t_p_1**3
+v_x_p_1 = guidance_output.start_node.velocity[0] + (guidance_output.optimal_edge_1.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_1 + 1.0/2.0*guidance_output.optimal_edge_1.c_1_array[0]*t_p_1**2
+v_y_p_1 = guidance_output.start_node.velocity[1] + (guidance_output.optimal_edge_1.c_0_array[1])*t_p_1 + 1.0/2.0*guidance_output.optimal_edge_1.c_1_array[1]*t_p_1**2
+v_z_p_1 = guidance_output.start_node.velocity[2] + (guidance_output.optimal_edge_1.c_0_array[2])*t_p_1 + 1.0/2.0*guidance_output.optimal_edge_1.c_1_array[2]*t_p_1**2
+u_x_p_1 = (guidance_output.optimal_edge_1.c_0_array[0]) + guidance_output.optimal_edge_1.c_1_array[0]*t_p_1
+u_y_p_1 = (guidance_output.optimal_edge_1.c_0_array[1]) + guidance_output.optimal_edge_1.c_1_array[1]*t_p_1
+u_z_p_1 = (guidance_output.optimal_edge_1.c_0_array[2]) + guidance_output.optimal_edge_1.c_1_array[2]*t_p_1
 
 t_p_2 = np.linspace(0.0, guidance_output.optimal_edge_2.t_f, 100)
 r_x_p_2 = guidance_output.optimal_node_1.position[0] + guidance_output.optimal_node_1.velocity[0]*t_p_2 + 0.5*(guidance_output.optimal_edge_2.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_2**2 + 1.0/6.0*guidance_output.optimal_edge_2.c_1_array[0]*t_p_2**3
 r_y_p_2 = guidance_output.optimal_node_1.position[1] + guidance_output.optimal_node_1.velocity[1]*t_p_2 + 0.5*(guidance_output.optimal_edge_2.c_0_array[1])*t_p_2**2 + 1.0/6.0*guidance_output.optimal_edge_2.c_1_array[1]*t_p_2**3
 r_z_p_2 = guidance_output.optimal_node_1.position[2] + guidance_output.optimal_node_1.velocity[2]*t_p_2 + 0.5*(guidance_output.optimal_edge_2.c_0_array[2])*t_p_2**2 + 1.0/6.0*guidance_output.optimal_edge_2.c_1_array[2]*t_p_2**3
+v_x_p_2 = guidance_output.optimal_node_1.velocity[0] + (guidance_output.optimal_edge_2.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_2 + 1.0/2.0*guidance_output.optimal_edge_2.c_1_array[0]*t_p_2**2
+v_y_p_2 = guidance_output.optimal_node_1.velocity[1] + (guidance_output.optimal_edge_2.c_0_array[1])*t_p_2 + 1.0/2.0*guidance_output.optimal_edge_2.c_1_array[1]*t_p_2**2
+v_z_p_2 = guidance_output.optimal_node_1.velocity[2] + (guidance_output.optimal_edge_2.c_0_array[2])*t_p_2 + 1.0/2.0*guidance_output.optimal_edge_2.c_1_array[2]*t_p_2**2
+u_x_p_2 = (guidance_output.optimal_edge_2.c_0_array[0]) + guidance_output.optimal_edge_2.c_1_array[0]*t_p_2
+u_y_p_2 = (guidance_output.optimal_edge_2.c_0_array[1]) + guidance_output.optimal_edge_2.c_1_array[1]*t_p_2
+u_z_p_2 = (guidance_output.optimal_edge_2.c_0_array[2]) + guidance_output.optimal_edge_2.c_1_array[2]*t_p_2
 
 t_p_3 = np.linspace(0.0, guidance_output.optimal_edge_3.t_f, 100)
 r_x_p_3 = guidance_output.optimal_node_2.position[0] + guidance_output.optimal_node_2.velocity[0]*t_p_3 + 0.5*(guidance_output.optimal_edge_3.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_3**2 + 1.0/6.0*guidance_output.optimal_edge_3.c_1_array[0]*t_p_3**3
 r_y_p_3 = guidance_output.optimal_node_2.position[1] + guidance_output.optimal_node_2.velocity[1]*t_p_3 + 0.5*(guidance_output.optimal_edge_3.c_0_array[1])*t_p_3**2 + 1.0/6.0*guidance_output.optimal_edge_3.c_1_array[1]*t_p_3**3
 r_z_p_3 = guidance_output.optimal_node_2.position[2] + guidance_output.optimal_node_2.velocity[2]*t_p_3 + 0.5*(guidance_output.optimal_edge_3.c_0_array[2])*t_p_3**2 + 1.0/6.0*guidance_output.optimal_edge_3.c_1_array[2]*t_p_3**3
+v_x_p_3 = guidance_output.optimal_node_2.velocity[0] + (guidance_output.optimal_edge_3.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_3 + 1.0/2.0*guidance_output.optimal_edge_3.c_1_array[0]*t_p_3**2
+v_y_p_3 = guidance_output.optimal_node_2.velocity[1] + (guidance_output.optimal_edge_3.c_0_array[1])*t_p_3 + 1.0/2.0*guidance_output.optimal_edge_3.c_1_array[1]*t_p_3**2
+v_z_p_3 = guidance_output.optimal_node_2.velocity[2] + (guidance_output.optimal_edge_3.c_0_array[2])*t_p_3 + 1.0/2.0*guidance_output.optimal_edge_3.c_1_array[2]*t_p_3**2
+u_x_p_3 = (guidance_output.optimal_edge_3.c_0_array[0]) + guidance_output.optimal_edge_3.c_1_array[0]*t_p_3
+u_y_p_3 = (guidance_output.optimal_edge_3.c_0_array[1]) + guidance_output.optimal_edge_3.c_1_array[1]*t_p_3
+u_z_p_3 = (guidance_output.optimal_edge_3.c_0_array[2]) + guidance_output.optimal_edge_3.c_1_array[2]*t_p_3
 
 t_plotting = np.concatenate((t_p_1, t_p_2 + guidance_output.optimal_edge_1.t_f, t_p_3 + guidance_output.optimal_edge_1.t_f + guidance_output.optimal_edge_2.t_f))
 r_x_plotting = np.concatenate((r_x_p_1, r_x_p_2, r_x_p_3))
 r_y_plotting = np.concatenate((r_y_p_1, r_y_p_2, r_y_p_3))
 r_z_plotting = np.concatenate((r_z_p_1, r_z_p_2, r_z_p_3))
+v_x_plotting = np.concatenate((v_x_p_1, v_x_p_2, v_x_p_3))
+v_y_plotting = np.concatenate((v_y_p_1, v_y_p_2, v_y_p_3))
+v_z_plotting = np.concatenate((v_z_p_1, v_z_p_2, v_z_p_3))
+u_x_plotting = np.concatenate((u_x_p_1, u_x_p_2, u_x_p_3))
+u_y_plotting = np.concatenate((u_y_p_1, u_y_p_2, u_y_p_3))
+u_z_plotting = np.concatenate((u_z_p_1, u_z_p_2, u_z_p_3))
 
 plotting_functions.plot_3d_data(t_plotting, -r_z_plotting, r_y_plotting, r_x_plotting)
+
+plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [r_x_plotting, r_y_plotting, r_z_plotting], ['rx', 'ry', 'rz'], 'Position vs Time', 'Time (s)', 'Position (m)')
+
+plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [v_x_plotting,v_y_plotting, v_z_plotting], ['vx', 'vy', 'vz'], 'Velocity vs Time', 'Time (s)', 'Velocity (m/s)')
+
+plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [u_x_plotting, u_y_plotting, u_z_plotting], ['ux', 'uy', 'uz'], 'Commanded Accel vs Time', 'Time (s)', 'Acceleration (m/s^2)')
+
+plotting_functions.plot_2d_data([t_plotting], [np.sqrt(u_x_plotting**2 + u_y_plotting**2 + u_z_plotting**2)], [''], 'Commanded Accel Magnitude vs time', 'Time (s)', 'Acceleration (m/s^2)')
 
 bins = np.linspace(1920, 1950, 100)
 plt.hist(guidance_output.end_masses)
