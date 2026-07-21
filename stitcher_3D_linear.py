@@ -6,6 +6,7 @@ import planetary_body_config
 import matplotlib.pyplot as plt
 import plotting_functions
 import copy
+import time
 
 
 class Vehicle:
@@ -83,30 +84,6 @@ class P2Node:
         self.time_to_p3 = time_to_p3
         self.target_edges = []
         self.parent_edges = []
-    
-    
-    # def create_and_append_forward_edge(self, target_node):
-    #     t_f = self.time_to_p3
-    #     if t_f == 0:
-    #         c_0_array = np.array([0.0, 0.0, 0.0])
-    #         c_1_array = np.array([0.0, 0.0, 0.0])
-    #         v_f = self.velocity
-    #         target_node.update_node_velocity(v_f)
-    #     else:
-    #         c_0_array = self.acceleration
-    #         c_1_x = 6 / t_f**3 * (target_node.position[0] - self.position[0] - self.velocity[0] * t_f + 0.5*t_f**2 * planetary_body_config.body_surface_gravity - 0.5*t_f**2 * c_0_array[0])
-    #         c_1_y = 6 / t_f**3 * (target_node.position[1] - self.position[1] - self.velocity[1] * t_f - 0.5*t_f**2 * c_0_array[1])
-    #         c_1_z = 6 / t_f**3 * (target_node.position[2] - self.position[2] - self.velocity[2] * t_f - 0.5*t_f**2 * c_0_array[2])
-    #         v_f_x = self.velocity[0] + (c_0_array[0] - planetary_body_config.body_surface_gravity) * t_f + 0.5*t_f**2 * c_1_x
-    #         v_f_y = self.velocity[1] + c_0_array[1] * t_f + 0.5*t_f**2 * c_1_y
-    #         v_f_z = self.velocity[2] + c_0_array[2] * t_f + 0.5*t_f**2 * c_1_z
-    #         c_1_array = np.array([c_1_x, c_1_y, c_1_z])
-    #         v_f = np.array([v_f_x, v_f_y, v_f_z])
-    #         target_node.update_node_velocity(v_f)
-    #     new_edge = Edge(self, target_node, c_0_array, c_1_array, t_f)
-    #     self.target_edges.append(new_edge)
-    #     target_node.parent_edges.append(new_edge)
-    #     return new_edge
     
     def create_and_append_backward_edge(self, target_node):
         t_f = self.time_to_p3
@@ -193,7 +170,7 @@ class Edge:
         temp_mass_consumed = temp_thrust_integral / v_e
         start_thrust_mag = start_accel_mag * edge_start_mass
         end_thrust_mag = end_accel_mag * (edge_start_mass - temp_mass_consumed)
-        print(self.c_0_array[0], (self.c_0_array + self.c_1_array*self.t_f)[0], self.parent_node.position[0], self.parent_node.velocity[0], self.target_node.position[0], self.target_node.velocity[0], self.t_f)
+        # print(self.c_0_array[0], (self.c_0_array + self.c_1_array*self.t_f)[0], self.parent_node.position[0], self.parent_node.velocity[0], self.target_node.position[0], self.target_node.velocity[0], self.t_f)
         if start_thrust_mag > thrust_bound_upper or start_thrust_mag < thrust_bound_lower or end_thrust_mag > thrust_bound_upper or end_thrust_mag < thrust_bound_lower:
             return False
         return True
@@ -206,7 +183,7 @@ class SampledSet:
         self.num_points = num_points
 
 class OutputData:
-    def __init__(self, start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, p1_nearest_neighbors_dict, p2_nearest_neighbors_dict, total_edges, total_valid_edges, end_masses):
+    def __init__(self, start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, p1_nearest_neighbors_dict, p2_nearest_neighbors_dict, total_edges, total_valid_edges, end_masses, solver_durations):
         self.start_node = start_node
         self.optimal_node_1 = optimal_node_1
         self.optimal_node_2 = optimal_node_2
@@ -219,6 +196,8 @@ class OutputData:
         self.total_edges = total_edges
         self.total_valid_edges = total_valid_edges
         self.end_masses = end_masses
+        self.solver_durations = solver_durations
+
 
 
 def get_nearest_array_neighbors(input_array, input_value):
@@ -284,24 +263,7 @@ def generate_phase_3_nodes(target_r, target_v, final_a):
     phase_3_nodes = [P3Node(target_r, target_v, final_a)]
     
     return phase_3_nodes
-
-
-# def prune_edge(edge, input_mass, thrust_lower_bound, thrust_upper_bound):
-#         # check all constraints here
-#         if not edge.check_const_accel_thrust_bounds(input_mass, thrust_lower_bound, thrust_upper_bound):
-#             prune_edge_flag = True
-#         # elif other constraints...
-
-#         if prune_edge_flag:
-#             input_edges.remove(edge)
-#             if mode == 'forward':
-#                 edge.target_node.parent_edges.remove(edge)
-#                 if len(edge.target_node.parent_edges) == 0:
-#                     input_nodes.remove(edge.target_node)
-#             elif mode == 'backward':
-#                 edge.parent_node.target_edges.remove(edge)
-#                 if len(edge.parent_node.target_edges) == 0:
-#                     input_nodes.remove(edge.parent_node)  
+ 
 
 def prune_edges(input_mass_array, input_v_e, thrust_lower_bound, thrust_upper_bound, input_edges, mode, input_nodes=None):
 
@@ -341,26 +303,28 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
 
     phase_1_nodes = generate_phase_1_nodes(p1_sampled_set_dict['time'], p1_sampled_set_dict['pos_x'], p1_sampled_set_dict['pos_y'], p1_sampled_set_dict['pos_z'])
 
+    last_solver_checkpoint_time = time.time()
     # connect start and phase 1 nodes with edges
     for phase_1_node in phase_1_nodes:
         start_node.create_and_append_edge(phase_1_node)
+    T_p1_edge_generation = time.time() - last_solver_checkpoint_time
 
     # compute costs of phase 1 edges
+    last_solver_checkpoint_time = time.time()
     for start_edge in start_node.target_edges:
         start_edge.compute_linear_accel_mass_consumed(vehicle.wet_mass, vehicle.v_e)
 
     total_p1_edges = 0
     for phase_1_edge in start_node.target_edges:
         total_p1_edges += 1
-    print(total_p1_edges)
-    # breakpoint()
+
     # prune phase 1 edges and nodes that violate constraints
     prune_edges([vehicle.wet_mass]*len(start_node.target_edges), vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust, start_node.target_edges, 'forward', phase_1_nodes)
     total_p1_edges = 0
     for phase_1_edge in start_node.target_edges:
         total_p1_edges += 1
-    print(total_p1_edges)
-    # breakpoint()
+    print('Total p1 edges: ' + str(total_p1_edges))
+    T_p1_edge_cost_pruning = time.time() - last_solver_checkpoint_time
 
     # create phase 3 nodes
     phase_3_nodes = generate_phase_3_nodes(final_r, final_v, final_a)
@@ -369,32 +333,38 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
     phase_2_nodes = generate_phase_2_nodes(p2_sampled_set_dict['time'], p2_sampled_set_dict['time_to_p3'], p2_sampled_set_dict['pos_x'], p2_sampled_set_dict['pos_y'], p2_sampled_set_dict['pos_z'])
 
 
+
+    last_solver_checkpoint_time = time.time()
     # connect phase 3 and phase 2 nodes with edges
     for phase_2_node in phase_2_nodes:
         for phase_3_node in phase_3_nodes:
             phase_2_node.create_and_append_backward_edge(phase_3_node)
-            # print(phase_2_node.velocity, phase_3_node.time)
 
     total_p3_edges = 0
     for phase_3_edge in phase_3_nodes[0].parent_edges:
         total_p3_edges += 1
-    print(total_p3_edges)
-    # breakpoint()
+    T_p3_edge_generation = time.time() - last_solver_checkpoint_time
+
     # prune phase 3 edges that violate constraints based on worst case mass
+    last_solver_checkpoint_time = time.time()
     for phase_3_node in phase_3_nodes:
         prune_edges([vehicle.dry_mass]*len(phase_3_node.parent_edges), vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust, phase_3_node.parent_edges, 'backward', phase_2_nodes)
     total_p3_edges = 0
     for phase_3_edge in phase_3_nodes[0].parent_edges:
         total_p3_edges += 1
-    print(total_p3_edges)
-    # breakpoint()
+    print('Total p3 edges: ' + str(total_p3_edges))
+    T_p3_edge_conservative_pruning = time.time() - last_solver_checkpoint_time
+
+
     # connect phase 1 and phase 2 nodes with edges
+    last_solver_checkpoint_time = time.time()
     for phase_1_node in phase_1_nodes:
         for phase_2_node in phase_2_nodes:
             phase_1_node.create_and_append_edge(phase_2_node)
-
+    T_p2_edge_generation = time.time() - last_solver_checkpoint_time
 
     # compute costs of phase 2 edges
+    last_solver_checkpoint_time = time.time()
     for phase_1_node in phase_1_nodes:
         for edg_idx in range(len(phase_1_node.target_edges)):
             phase_1_node.target_edges[edg_idx].compute_linear_accel_mass_consumed(phase_1_node.parent_edges[0].end_mass, vehicle.v_e)
@@ -403,8 +373,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
     for phase_1_node in phase_1_nodes:
         for phase_2_edge in phase_1_node.target_edges:
             total_p2_edges += 1
-    print(total_p2_edges)
-    # breakpoint()
+
     # prune phase 2 edges that violate constraints
     for phase_1_node in phase_1_nodes:
         prune_edges([phase_1_node.parent_edges[0].end_mass]*len(phase_1_node.target_edges), vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust, phase_1_node.target_edges, 'forward', phase_2_nodes)
@@ -412,8 +381,8 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
     for phase_1_node in phase_1_nodes:
         for phase_2_edge in phase_1_node.target_edges:
             total_p2_edges += 1
-    print(total_p2_edges)
-    # breakpoint()
+    print('Total p2 edges: ' + str(total_p2_edges))
+    T_p2_edge_cost_pruning = time.time() - last_solver_checkpoint_time
 
     for phase_2_node in phase_2_nodes:
         if len(phase_2_node.target_edges) != 1:
@@ -428,7 +397,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
         for phase_2_edge in phase_1_node.target_edges:
             total_edges += 1
 
-
+    last_solver_checkpoint_time = time.time()
     end_masses = []
     best_mass = 0.0
     total_valid_edges = 0
@@ -450,9 +419,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
                         optimal_edge_3 = copy.copy(target_edge)
                         optimal_edge_2 = copy.copy(parent_edge)
                         optimal_edge_1 = copy.copy(optimal_node_1.parent_edges[0])
-    print(total_valid_edges)
-    print(best_mass)
-    # breakpoint()
+    T_p3_edge_cost_pruning = time.time() - last_solver_checkpoint_time
     
     new_p1_time_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['time'].lower_bound, p1_sampled_set_dict['time'].upper_bound, p1_sampled_set_dict['time'].num_points), optimal_edge_1.t_f), 5)
     new_p1_pos_x_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['pos_x'].lower_bound, p1_sampled_set_dict['pos_x'].upper_bound, p1_sampled_set_dict['pos_x'].num_points), optimal_node_1.position[0]), 5)
@@ -481,7 +448,21 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
     }
 
 
-    output = OutputData(start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, new_p1_sampled_set_dict, new_p2_sampled_set_dict, total_edges, total_valid_edges, end_masses)
+    solver_durations = {'T_p1_edge_generation': T_p1_edge_generation,
+                        'T_p1_edge_cost_pruning': T_p1_edge_cost_pruning,
+                        'T_p3_edge_generation': T_p3_edge_generation,
+                        'T_p3_edge_conservative_pruning': T_p3_edge_conservative_pruning,
+                        'T_p2_edge_generation': T_p2_edge_generation, 
+                        'T_p2_edge_cost_pruning': T_p2_edge_cost_pruning,
+                        'T_p3_edge_cost_pruning': T_p3_edge_cost_pruning}
+    
+    
+    
+    
+    
+    
+
+    output = OutputData(start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, new_p1_sampled_set_dict, new_p2_sampled_set_dict, total_edges, total_valid_edges, end_masses, solver_durations)
     return output
 
 
@@ -495,10 +476,10 @@ final_a = np.array([1.0, -0.25, 0.0])
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-initial_r = np.array([500.0, 50.0, 50.0])
-initial_v = np.array([-50.0, -0.0, 0.0])
-initial_a = np.array([10.0, -0.0, 0.0])
-final_a = np.array([50.0, 3.0, 0.0])
+initial_r = np.array([500.0, 10.0, 0.0])
+initial_v = np.array([-60.0, -0.0, 0.0])
+initial_a = np.array([-9.8, -18.0, 0.0])
+final_a = np.array([10.0, -4.0, 0.0])
 
 lander = Vehicle(150000, 100000, 9000000, 1000000, 320)
 
@@ -536,7 +517,6 @@ guidance_output = generate_stitcher_trajectory_constant_accel(lander, initial_r,
 
 # guidance_output = generate_stitcher_trajectory_constant_accel(lander, initial_r, initial_v, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict)
 
-
 print(guidance_output.total_valid_edges)
 print(guidance_output.total_valid_edges/guidance_output.total_edges)
 print(sum(guidance_output.end_masses)/len(guidance_output.end_masses))
@@ -559,7 +539,8 @@ print(guidance_output.optimal_edge_1.c_0_array + guidance_output.optimal_edge_1.
 print('Optimal mass consumed:')
 print(guidance_output.optimal_edge_1.mass_consumed, guidance_output.optimal_edge_2.mass_consumed, guidance_output.optimal_edge_3.mass_consumed)
 print('Total mass consumed:' + str(round(lander.wet_mass - guidance_output.optimal_edge_3.end_mass, 2)) + ' kg, end vehicle mass: ' + str(round(guidance_output.optimal_edge_3.end_mass, 2)) + ' kg')
-
+for key in [*guidance_output.solver_durations]:
+    print(key + ': ' + str(round(guidance_output.solver_durations[key], 3)))
 
 
 
@@ -607,7 +588,7 @@ u_x_plotting = np.concatenate((u_x_p_1, u_x_p_2, u_x_p_3))
 u_y_plotting = np.concatenate((u_y_p_1, u_y_p_2, u_y_p_3))
 u_z_plotting = np.concatenate((u_z_p_1, u_z_p_2, u_z_p_3))
 
-plotting_functions.plot_3d_data(t_plotting, -r_z_plotting, r_y_plotting, r_x_plotting)
+plotting_functions.plot_3d_data_with_rocket(t_plotting, -r_z_plotting, r_y_plotting, r_x_plotting, t_plotting[::20], -u_z_plotting[::20], u_y_plotting[::20], u_x_plotting[::20])
 
 plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [r_x_plotting, r_y_plotting, r_z_plotting], ['rx', 'ry', 'rz'], 'Position vs Time', 'Time (s)', 'Position (m)')
 

@@ -236,7 +236,7 @@ def plot_2d_data(x_data, y_data, labels, title, xaxis_label, yaxis_label):
             go.Scatter(
                 x=x,
                 y=y,
-                mode="lines+markers",
+                mode="lines",
                 name=label,
                 connectgaps=True,
             )
@@ -253,6 +253,285 @@ def plot_2d_data(x_data, y_data, labels, title, xaxis_label, yaxis_label):
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
         ),
         xaxis=dict(type="linear"),
+    )
+
+    fig.show()
+
+def plot_3d_data_with_accel(
+    data_t,
+    data_x,
+    data_y,
+    data_z,
+    acc_t,
+    acc_x,
+    acc_y,
+    acc_z,
+    arrow_scale=1.0,
+):
+    """Plots 3D trajectory with acceleration vectors attached to the path.
+
+    Parameters:
+    - data_t, data_x, data_y, data_z: Full trajectory time and position arrays.
+    - acc_t: Downsampled/sliced time array for acceleration points.
+    - acc_x, acc_y, acc_z: Acceleration vector components corresponding to
+    acc_t.
+    - arrow_scale: Scaling factor for the visual length of the acceleration
+    arrows.
+    """
+    fig = go.Figure()
+
+    # 1. Add the 3D path trace
+    fig.add_trace(
+        go.Scatter3d(
+            x=data_x,
+            y=data_y,
+            z=data_z,
+            mode="lines",
+            line=dict(color="rgba(100, 100, 100, 0.4)", width=4, opacity=1.0),
+            # marker=dict(
+            #     size=4,
+            #     color=data_t,
+            #     colorscale="Viridis",
+            #     colorbar=dict(title="Time"),
+            #     opacity=0.9,
+            # ),
+            customdata=data_t,
+            hovertemplate=(
+                "<b>Time:</b> %{customdata:.1f}<br>"
+                + "<b>X:</b> %{x:.2f}<br>"
+                + "<b>Y:</b> %{y:.2f}<br>"
+                + "<b>Z:</b> %{z:.2f}<extra></extra>"
+            ),
+            name="Trajectory",
+        )
+    )
+
+    # 2. Match `acc_t` to indices in `data_t` to get base positions for arrows
+    # Works seamlessly whether acc_t is created via indexing (data_t[::k]) or interpolation
+    indices = np.searchsorted(data_t, acc_t)
+
+    # Base coordinates on the path for the acceleration vectors
+    base_x = np.asarray(data_x)[indices]
+    base_y = np.asarray(data_y)[indices]
+    base_z = np.asarray(data_z)[indices]
+
+    # 3. Add 3D Acceleration Vectors using Cone
+    fig.add_trace(
+        go.Cone(
+            x=base_x,
+            y=base_y,
+            z=base_z,  # Base point positions
+            u=acc_x,
+            v=acc_y,
+            w=acc_z,  # Vector directions/magnitudes
+            sizemode="raw",  # Scales cones relative to vector magnitudes
+            sizeref=arrow_scale,  # Fine-tune visual arrow size
+            anchor="tail",  # Attaches arrow tail (start) to the trajectory point
+            colorscale="Reds",
+            showscale=False,  # Set to True if you want a separate colorbar for acceleration magnitude
+            hovertemplate=(
+                "<b>Acc Vector</b><br>"
+                + "<b>Ax:</b> %{u:.2f}<br>"
+                + "<b>Ay:</b> %{v:.2f}<br>"
+                + "<b>Az:</b> %{w:.2f}<extra></extra>"
+            ),
+            name="Acceleration",
+        )
+    )
+
+    # 4. Scene Layout Adjustments
+    fig.update_layout(
+        title="3D Trajectory with Acceleration Vectors",
+        scene=dict(
+            xaxis_title="X Position",
+            yaxis_title="Y Position",
+            zaxis_title="Z Position",
+            bgcolor="rgb(250, 250, 250)",
+            aspectmode="data",  # Keeps 1:1:1 aspect ratio
+        ),
+    )
+
+    fig.show()
+
+
+def plot_3d_data_with_rocket(
+    data_t,
+    data_x,
+    data_y,
+    data_z,
+    acc_t,
+    acc_x,
+    acc_y,
+    acc_z,
+    rocket_length=40.0,  # Constant length of the rocket cylinder
+    rocket_radius=4.5,  # Constant radius of the rocket body
+    thrust_scale=3,  # Scaling factor for thrust vector size
+):
+    fig = go.Figure()
+
+    # 1. Main 3D Trajectory Trace
+    fig.add_trace(
+        go.Scatter3d(
+            x=data_x,
+            y=data_y,
+            z=data_z,
+            mode="lines",
+            opacity=1.0,
+            line=dict(color="rgb(100, 100, 100)", width=2),
+            customdata=data_t,
+            hovertemplate=(
+                "<b>Time:</b> %{customdata:.1f}<br>"
+                + "<b>X:</b> %{x:.2f}<br>"
+                + "<b>Y:</b> %{y:.2f}<br>"
+                + "<b>Z:</b> %{z:.2f}<extra></extra>"
+            ),
+            name="Trajectory",
+        )
+    )
+
+    # 2. Match `acc_t` to indices in `data_t` to get base positions
+    indices = np.searchsorted(data_t, acc_t)
+
+    base_x = np.asarray(data_x)[indices]
+    base_y = np.asarray(data_y)[indices]
+    base_z = np.asarray(data_z)[indices]
+
+    acc_x = np.asarray(acc_x)
+    acc_y = np.asarray(acc_y)
+    acc_z = np.asarray(acc_z)
+
+    # Convert vectors to unit vectors to orient the rocket body
+    norms = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
+    # Avoid divide-by-zero for zero acceleration
+    norms_safe = np.where(norms == 0, 1e-8, norms)
+
+    dir_x = acc_x / norms_safe
+    dir_y = acc_y / norms_safe
+    dir_z = acc_z / norms_safe
+
+    # 3. Draw Cylinders for Rockets along the Acceleration Direction
+    # Build parametric cylinder meshes
+    n_sides = 12
+    theta = np.linspace(0, 2 * np.pi, n_sides, endpoint=False)
+
+    cyl_x, cyl_y, cyl_z = [], [], []
+    i_list, j_list, k_list = [], [], []
+    vertex_offset = 0
+
+    for bx, by, bz, dx, dy, dz in zip(
+        base_x, base_y, base_z, dir_x, dir_y, dir_z
+    ):
+        # Local orthonormal basis (u, v, w) with w along direction vector
+        w = np.array([dx, dy, dz])
+        up = (
+            np.array([0, 0, 1])
+            if abs(w[2]) < 0.9
+            else np.array([1, 0, 0])
+        )
+        u = np.cross(up, w)
+        u /= np.linalg.norm(u)
+        v = np.cross(w, u)
+
+        # Base circle points (at trajectory position)
+        base_pts = [
+            np.array([bx, by, bz])
+            + rocket_radius * (np.cos(t) * u + np.sin(t) * v)
+            for t in theta
+        ]
+        # Top circle points (extended along orientation vector)
+        top_pts = [pt + rocket_length * w for pt in base_pts]
+
+        pts = base_pts + top_pts
+        cyl_x.extend([p[0] for p in pts])
+        cyl_y.extend([p[1] for p in pts])
+        cyl_z.extend([p[2] for p in pts])
+
+        # Triangulate side faces of cylinder
+        for s in range(n_sides):
+            next_s = (s + 1) % n_sides
+            b1, b2 = vertex_offset + s, vertex_offset + next_s
+            t1, t2 = vertex_offset + n_sides + s, vertex_offset + n_sides + next_s
+
+            i_list.extend([b1, t1])
+            j_list.extend([b2, t2])
+            k_list.extend([t1, b2])
+
+        vertex_offset += 2 * n_sides
+
+    fig.add_trace(
+        go.Mesh3d(
+            x=cyl_x,
+            y=cyl_y,
+            z=cyl_z,
+            i=i_list,
+            j=j_list,
+            k=k_list,
+            color="silver",
+            opacity=1.0,
+            flatshading=True,
+            name="Rocket Body",
+            showlegend=True,
+            hoverinfo="skip",
+        )
+    )
+
+    # 4. Draw Opposing Thrust Cones (Tip attached at trajectory, pointing in -Acc direction)
+    fig.add_trace(
+        go.Cone(
+            x=base_x,
+            y=base_y,
+            z=base_z,
+            u=acc_x,  # Reversely directed vector
+            v=acc_y,
+            w=acc_z,
+            sizemode="raw",
+            sizeref=thrust_scale,
+            anchor="tip",  # Connects the tip of the cone to the trajectory point
+            colorscale=[[0, "red"], [1, "red"]],
+            showscale=False,
+            showlegend=True,
+            opacity=1.0,
+            hovertemplate=(
+                "<b>Thrust Vector</b><br>"
+                + "<b>Tx:</b> %{u:.2f}<br>"
+                + "<b>Ty:</b> %{v:.2f}<br>"
+                + "<b>Tz:</b> %{w:.2f}<extra></extra>"
+            ),
+            name="Thrust Vector",
+        )
+    )
+
+    all_x = np.concatenate([data_x, cyl_x])
+    all_y = np.concatenate([data_y, cyl_y])
+    all_z = np.concatenate([data_z, cyl_z])
+
+    x_min, x_max = np.min(all_x), np.max(all_x)
+    y_min, y_max = np.min(all_y), np.max(all_y)
+    z_min, z_max = np.min(all_z), np.max(all_z)
+
+    # Find the largest span to ensure 1:1:1 scale
+    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
+
+    x_mid = (x_max + x_min) / 2.0
+    y_mid = (y_max + y_min) / 2.0
+    z_mid = (z_max + z_min) / 2.0
+
+    # 5. Scene Layout Adjustments
+    fig.update_layout(
+        title="Trajectory",
+        scene=dict(
+            xaxis=dict(
+                title="X Position", range=[x_mid - max_range, x_mid + max_range]
+            ),
+            yaxis=dict(
+                title="Y Position", range=[y_mid - max_range, y_mid + max_range]
+            ),
+            zaxis=dict(
+                title="Z Position", range=[z_mid - max_range, z_mid + max_range]
+            ),
+            bgcolor="rgb(250, 250, 250)",
+            aspectmode="cube",  # Enforces true 1:1:1 geometric scaling
+        ),
     )
 
     fig.show()
