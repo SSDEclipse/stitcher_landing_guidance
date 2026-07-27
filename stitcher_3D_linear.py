@@ -38,6 +38,7 @@ class StartNode:
             target_node.update_node_velocity(v_f)
         else:
             c_0_array = self.acceleration.copy()
+            c_0_array[0] -= planetary_body_config.body_surface_gravity
             c_1_array = 6.0 / t_f**3 * (target_node.position - self.position - self.velocity * t_f - 0.5*t_f**2 * c_0_array)
             v_f = self.velocity + c_0_array * t_f + 0.5*t_f**2 * c_1_array
             c_0_array[0] += planetary_body_config.body_surface_gravity
@@ -93,8 +94,10 @@ class P2Node:
             v_0 = target_node.velocity
             self.update_node_velocity(v_0)
         else:
-            c_0_array = -2.0 * target_node.acceleration - 6.0 / t_f**2 * (target_node.position - self.position - target_node.velocity*t_f)
-            c_1_array = 3.0 / t_f * target_node.acceleration + 6 / t_f**3 * (target_node.position - self.position - target_node.velocity*t_f)
+            global_end_acceleration = target_node.acceleration.copy()
+            global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
+            c_0_array = -2.0 * (global_end_acceleration) - 6.0 / t_f**2 * (target_node.position - self.position - target_node.velocity*t_f)
+            c_1_array = 3.0 / t_f * (global_end_acceleration) + 6 / t_f**3 * (target_node.position - self.position - target_node.velocity*t_f)
             v_0 = target_node.velocity - c_0_array*t_f - 0.5*t_f**2 * c_1_array
             c_0_array[0] += planetary_body_config.body_surface_gravity
             self.update_node_velocity(v_0)
@@ -478,8 +481,8 @@ lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
 initial_r = np.array([500.0, 10.0, 0.0])
 initial_v = np.array([-60.0, -0.0, 0.0])
-initial_a = np.array([-9.8, -18.0, 0.0])
-final_a = np.array([10.0, -4.0, 0.0])
+initial_a = np.array([0.0, -18.0, 0.0])
+final_a = np.array([20.0, 0.0, 0.0])
 
 lander = Vehicle(150000, 100000, 9000000, 1000000, 320)
 
@@ -588,7 +591,7 @@ u_x_plotting = np.concatenate((u_x_p_1, u_x_p_2, u_x_p_3))
 u_y_plotting = np.concatenate((u_y_p_1, u_y_p_2, u_y_p_3))
 u_z_plotting = np.concatenate((u_z_p_1, u_z_p_2, u_z_p_3))
 
-plotting_functions.plot_3d_data_with_rocket(t_plotting, -r_z_plotting, r_y_plotting, r_x_plotting, t_plotting[::20], -u_z_plotting[::20], u_y_plotting[::20], u_x_plotting[::20])
+plotting_functions.plot_3d_data_with_rocket(t_plotting, -r_z_plotting, r_y_plotting, r_x_plotting, t_plotting[::20], -u_z_plotting[::20], u_y_plotting[::20], u_x_plotting[::20], rocket_length=40, rocket_radius=4.5, thrust_scale=1.5)
 
 plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [r_x_plotting, r_y_plotting, r_z_plotting], ['rx', 'ry', 'rz'], 'Position vs Time', 'Time (s)', 'Position (m)')
 
@@ -600,4 +603,4 @@ plotting_functions.plot_2d_data([t_plotting], [np.sqrt(u_x_plotting**2 + u_y_plo
 
 bins = np.linspace(1920, 1950, 100)
 plt.hist(guidance_output.end_masses)
-plt.show()
+# plt.show()
