@@ -580,10 +580,10 @@ final_a = np.array([1.0, -0.25, 0.0])
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-initial_r = np.array([500.0, 100.0, 0.0])
-initial_v = np.array([-80.0, -40.0, 0.0])
-initial_a = np.array([20.0, 6.0, 0.0])
-final_a = np.array([30.0, 0.0, 0.0])
+initial_r = np.array([500.0, 100.0, 200.0])
+initial_v = np.array([-80.0, -40.0, -20.0])
+initial_a = np.array([15.0, 6.0, 0.0])
+final_a = np.array([40.0, -6.0, -6.0])
 final_r = np.array([0.0, 0.0, 0.0])
 final_v = np.array([0.0, 0.0, 0.0])
 
