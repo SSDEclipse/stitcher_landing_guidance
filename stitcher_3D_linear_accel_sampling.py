@@ -110,7 +110,7 @@ class P2Node:
             c_0_array[0] += planetary_body_config.body_surface_gravity
             self.update_node_velocity(v_0)
             self.update_node_acceleration(c_0_array)
-            if np.linalg.norm(c_0_array) > 40.001:
+            if np.linalg.norm(c_0_array) > 50.001:
                 print(np.linalg.norm(c_0_array))
                 raise ValueError('acceleration here does not match what the sampling should yield')
 
@@ -260,16 +260,23 @@ def generate_acceleration_set(acc_mag, acc_azimuth, acc_zenith):
     output = np.asarray(output)
     return output
 
-def generate_phase_1_nodes(time_sampled_set, start_node, acc_mag_sampled_set, acc_azimuth_sampled_set, acc_zenith_sampled_set):
+def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_sampled_state, acc_azimuth_sampled_set, acc_zenith_sampled_set):
 
     sampled_time_array = np.linspace(time_sampled_set.lower_bound, time_sampled_set.upper_bound, time_sampled_set.num_points)
-    sampled_acc_mag_array = np.linspace(acc_mag_sampled_set.lower_bound, acc_mag_sampled_set.upper_bound, acc_mag_sampled_set.num_points)
     sampled_acc_azimuth_array = np.linspace(acc_azimuth_sampled_set.lower_bound, acc_azimuth_sampled_set.upper_bound, acc_azimuth_sampled_set.num_points)
     sampled_acc_zenith_array = np.linspace(acc_zenith_sampled_set.lower_bound, acc_zenith_sampled_set.upper_bound, acc_zenith_sampled_set.num_points)
-    sampled_accelerations_array = generate_acceleration_set(sampled_acc_mag_array, sampled_acc_azimuth_array, sampled_acc_zenith_array)
+    sampled_thrust_level_array = np.linspace(thrust_level_sampled_state.lower_bound, thrust_level_sampled_state.upper_bound, thrust_level_sampled_state.num_points)
+
+
 
     phase_1_nodes = []
     for time in sampled_time_array:
+        sampled_acc_mag_array = []
+        for thrust_level in sampled_thrust_level_array:
+            thrust_magnitude = thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust
+            end_mass = vehicle.wet_mass - thrust_magnitude/vehicle.v_e * time
+            sampled_acc_mag_array.append(thrust_magnitude / end_mass)
+        sampled_accelerations_array = generate_acceleration_set(sampled_acc_mag_array, sampled_acc_azimuth_array, sampled_acc_zenith_array)
         for acc in sampled_accelerations_array:
             c_0_array = start_node.acceleration.copy()
             c_0_array[0] -= planetary_body_config.body_surface_gravity
@@ -280,18 +287,29 @@ def generate_phase_1_nodes(time_sampled_set, start_node, acc_mag_sampled_set, ac
             phase_1_nodes.append(P1Node(pos, None, None, time))
     return phase_1_nodes
 
-def generate_phase_2_nodes(time_sampled_set, time_to_p3_sampled_set, end_node, acc_mag_sampled_set, acc_azimuth_sampled_set, acc_zenith_sampled_set):
+def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, end_node, thrust_level_sampled_state, acc_azimuth_sampled_set, acc_zenith_sampled_set):
 
     sampled_time_array = np.linspace(time_sampled_set.lower_bound, time_sampled_set.upper_bound, time_sampled_set.num_points)
     sampled_time_to_p3_array = np.linspace(time_to_p3_sampled_set.lower_bound, time_to_p3_sampled_set.upper_bound, time_to_p3_sampled_set.num_points)
-    sampled_acc_mag_array = np.linspace(acc_mag_sampled_set.lower_bound, acc_mag_sampled_set.upper_bound, acc_mag_sampled_set.num_points)
     sampled_acc_azimuth_array = np.linspace(acc_azimuth_sampled_set.lower_bound, acc_azimuth_sampled_set.upper_bound, acc_azimuth_sampled_set.num_points)
     sampled_acc_zenith_array = np.linspace(acc_zenith_sampled_set.lower_bound, acc_zenith_sampled_set.upper_bound, acc_zenith_sampled_set.num_points)
-    sampled_accelerations_array = generate_acceleration_set(sampled_acc_mag_array, sampled_acc_azimuth_array, sampled_acc_zenith_array)
+    sampled_thrust_level_array = np.linspace(thrust_level_sampled_state.lower_bound, thrust_level_sampled_state.upper_bound, thrust_level_sampled_state.num_points)
+
 
     phase_2_nodes = []
     for time in sampled_time_array:
         for time_to_p3 in sampled_time_to_p3_array:
+            sampled_acc_mag_array = []
+            for thrust_level in sampled_thrust_level_array:
+                thrust_magnitude = thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust
+                if thrust_level > 0.5:
+                    end_mass = vehicle.wet_mass - thrust_magnitude/vehicle.v_e * time_to_p3
+                else:
+                    end_mass = vehicle.dry_mass + thrust_magnitude/vehicle.v_e * time_to_p3
+                sampled_acc_mag_array.append(thrust_magnitude / end_mass)
+                if thrust_magnitude / end_mass > 50.0:
+                    breakpoint()
+            sampled_accelerations_array = generate_acceleration_set(sampled_acc_mag_array, sampled_acc_azimuth_array, sampled_acc_zenith_array)
             for acc in sampled_accelerations_array:
                 global_start_acceleration = acc.copy()
                 global_start_acceleration[0] -= planetary_body_config.body_surface_gravity
@@ -402,7 +420,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
 
     # create phase 1 nodes
 
-    phase_1_nodes = generate_phase_1_nodes(p1_sampled_set_dict['time'], start_node, p1_sampled_set_dict['acc_mag'], p1_sampled_set_dict['acc_azimuth'], p1_sampled_set_dict['acc_zenith'])
+    phase_1_nodes = generate_phase_1_nodes(vehicle, p1_sampled_set_dict['time'], start_node, p1_sampled_set_dict['thrust_state'], p1_sampled_set_dict['acc_azimuth'], p1_sampled_set_dict['acc_zenith'])
     # phase_1_nodes = generate_phase_1_nodes(p1_sampled_set_dict['time'], p1_sampled_set_dict['pos_x'], p1_sampled_set_dict['pos_y'], p1_sampled_set_dict['pos_z'])
 
     last_solver_checkpoint_time = time.time()
@@ -432,7 +450,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
     phase_3_nodes = generate_phase_3_nodes(final_r, final_v, final_a)
 
     # create phase 2 nodes
-    phase_2_nodes = generate_phase_2_nodes(p2_sampled_set_dict['time'], p2_sampled_set_dict['time_to_p3'], phase_3_nodes[0], p2_sampled_set_dict['acc_mag'], p2_sampled_set_dict['acc_azimuth'], p2_sampled_set_dict['acc_zenith'])
+    phase_2_nodes = generate_phase_2_nodes(vehicle, p2_sampled_set_dict['time'], p2_sampled_set_dict['time_to_p3'], phase_3_nodes[0], p2_sampled_set_dict['thrust_state'], p2_sampled_set_dict['acc_azimuth'], p2_sampled_set_dict['acc_zenith'])
     # phase_2_nodes = generate_phase_2_nodes(p2_sampled_set_dict['time'], p2_sampled_set_dict['time_to_p3'], p2_sampled_set_dict['pos_x'], p2_sampled_set_dict['pos_y'], p2_sampled_set_dict['pos_z'])
 
 
@@ -586,40 +604,38 @@ initial_a = np.array([15.0, 6.0, 0.0])
 final_a = np.array([40.0, -6.0, -6.0])
 final_r = np.array([0.0, 0.0, 0.0])
 final_v = np.array([0.0, 0.0, 0.0])
+initial_a = np.array([34.0, 19.0, -5.0])
+final_a = np.array([40.0, 0.0, 12.0])
 
+lander = Vehicle(150000, 135000, 6000000, 2000000, 320)
 
-lander = Vehicle(150000, 140000, 6000000, 2000000, 320)
+constraints = Constraints(interphase_max_angle=180*np.pi/180)
 
-constraints = Constraints(interphase_max_angle=50*np.pi/180)
+p1_time_sampled_set = SampledSet(1.0, 10, 6)
 
-p1_time_sampled_set = SampledSet(2.0, 10, 6)
-
-p1_accel_mag_sampled_set = SampledSet(lander.min_thrust / lander.dry_mass, lander.max_thrust / lander.wet_mass, 2)
+p1_thrust_state = SampledSet(0.1, 0.9, 2)
 azimuth_v_0 = np.arctan2(initial_v[2], initial_v[1])
 initial_los_yz = np.array([final_r[1] - initial_r[1], final_r[2] - initial_r[2]])
 if np.cross(initial_los_yz, initial_v)[0] > 0:
     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
 else:
     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
-# p1_accel_azimuth_sampled_set = SampledSet(0, 2*np.pi, 5)
-p1_accel_zenith_sampled_set = SampledSet(0, 40*np.pi/180, 5)
+p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
 
-p2_accel_mag_sampled_set = SampledSet(lander.min_thrust / lander.dry_mass, lander.max_thrust / lander.wet_mass, 2)
+p2_thrust_state = SampledSet(0.1, 0.9, 2)
 azimuth_v_0 = np.arctan2(initial_v[2], initial_v[1])
 initial_los_yz = np.array([final_r[1] - initial_r[1], final_r[2] - initial_r[2]])
 if np.cross(initial_los_yz, initial_v)[0] > 0:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
 else:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
-# breakpoint()
-# p2_accel_azimuth_sampled_set = SampledSet(0, 2*np.pi, 5)
-p2_accel_zenith_sampled_set = SampledSet(0, 30*np.pi/180, 5)
+p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
 
 p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 4)
 p1_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
 p1_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
 
-p2_time_sampled_set = SampledSet(2.0, 10, 10)
+p2_time_sampled_set = SampledSet(1.0, 10, 10)
 p2_time_to_p3_sampled_set = SampledSet(2.0, 10, 6)
 p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 4)
 p2_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
@@ -630,7 +646,7 @@ p1_sampled_set_dict = {
     'pos_x': p1_pos_x_sampled_set,
     'pos_y': p1_pos_y_sampled_set,
     'pos_z': p1_pos_z_sampled_set,
-    'acc_mag': p1_accel_mag_sampled_set,
+    'thrust_state': p1_thrust_state,
     'acc_azimuth': p1_accel_azimuth_sampled_set,
     'acc_zenith': p1_accel_zenith_sampled_set
 }
@@ -641,7 +657,7 @@ p2_sampled_set_dict = {
     'pos_x': p2_pos_x_sampled_set,
     'pos_y': p2_pos_y_sampled_set,
     'pos_z': p2_pos_z_sampled_set,
-    'acc_mag': p2_accel_mag_sampled_set,
+    'thrust_state': p2_thrust_state,
     'acc_azimuth': p2_accel_azimuth_sampled_set,
     'acc_zenith': p2_accel_zenith_sampled_set
 }
@@ -723,9 +739,9 @@ u_z_plotting = np.concatenate((u_z_p_1, u_z_p_2, u_z_p_3))
 
 plotting_functions.plot_3d_data_with_rocket(t_plotting, -r_z_plotting, r_y_plotting, r_x_plotting, t_plotting[::20], -u_z_plotting[::20], u_y_plotting[::20], u_x_plotting[::20], rocket_length=40, rocket_radius=4.5, thrust_scale=1.5)
 
-plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [r_x_plotting, r_y_plotting, r_z_plotting], ['rx', 'ry', 'rz'], 'Position vs Time', 'Time (s)', 'Position (m)')
+plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [r_x_plotting, r_y_plotting, r_z_plotting], ['rx', 'ry', 'rz'], 'Sampling-based Position vs Time', 'Time (s)', 'Position (m)')
 
-plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [v_x_plotting,v_y_plotting, v_z_plotting], ['vx', 'vy', 'vz'], 'Velocity vs Time', 'Time (s)', 'Velocity (m/s)')
+plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [v_x_plotting,v_y_plotting, v_z_plotting], ['vx', 'vy', 'vz'], 'Sampling-based Velocity vs Time', 'Time (s)', 'Velocity (m/s)')
 
 plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [u_x_plotting, u_y_plotting, u_z_plotting], ['ux', 'uy', 'uz'], 'Commanded Accel vs Time', 'Time (s)', 'Acceleration (m/s^2)')
 

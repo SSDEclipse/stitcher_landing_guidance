@@ -29,23 +29,32 @@ thrust_max_angle = 45.0 * np.pi / 180.0     # max vehicle tilt, rad
 glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
 
 
+# initial_r = np.array([500.0, 100.0, 200.0])
+# initial_v = np.array([-80.0, -40.0, -20.0])
+# initial_a = np.array([15.0, 6.0, 0.0])
+# final_a = np.array([40.0, -6.0, -6.0])
+# final_r = np.array([0.0, 0.0, 0.0])
+# final_v = np.array([0.0, 0.0, 0.0])
 
-T = 21.0  # Time horizon
+
+# lander = Vehicle(150000, 140000, 6000000, 2000000, 320)
+
+T = 10.0  # Time horizon
 N = 50    # Number of discretization points
 dt = T / (N - 1)  # Time step
 
-r0 = np.array([[200.0], [10.0], [10.0]])
-v0 = np.array([[-10.0], [-3.0], [-2.0]])
+r0 = np.array([[500.0], [100.0], [200.0]])
+v0 = np.array([[-80.0], [-40.0], [-20.0]])
 rf = np.array([[0.0], [0.0], [0.0]])
 vf = np.array([[0.0], [0.0], [0.0]])
 
-m_wet = 2000.0  # mass, kg
-m_dry = 1000.0
-g = np.array([[3.7278], [0.0], [0.0]])
-T_max_thrust = 10000
-T_max = 10000  # max thrust force, N
-T_min = 3000  # min thrust force, N
-Isp = 300.0
+m_wet = 150000.0  # mass, kg
+m_dry = 120000.0
+g = np.array([[9.80665], [0.0], [0.0]])
+T_max_thrust = 6000000
+T_max = 6000000  # max thrust force, N
+T_min = 2000000  # min thrust force, N
+Isp = 320.0
 alpha = 1.0 / (9.80665 * Isp)
 thrust_max_angle = 90.0 * np.pi / 180.0     # max vehicle tilt, rad
 glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
@@ -224,7 +233,7 @@ fig1.add_trace(go.Scatter3d(
 ))
 
 # Add thrust vectors as uniform red lines (no color gradient applied here)
-scale_factor = 50  # Adjust this to scale the thrust line lengths visually
+scale_factor = 2  # Adjust this to scale the thrust line lengths visually
 for i in range(N):
     fig1.add_trace(go.Scatter3d(
         x=[r_opt[2, i], r_opt[2, i] + scale_factor * u_opt[2, i]],
@@ -241,63 +250,67 @@ fig1.update_layout(
         xaxis_title='Z',
         yaxis_title='Y',
         zaxis_title='X',
-        camera=dict(eye=dict(x=-1.5, y=-1.5, z=1.0))
+        camera=dict(eye=dict(x=-1.5, y=-1.5, z=1.0)),
+        aspectmode="cube"
     ),
     margin=dict(l=0, r=0, b=0, t=40)
 )
 fig1.show()
 
-# =============================================================================
-# Figure 2: Position and Velocity Time Series Subplots
-# =============================================================================
-fig2 = make_subplots(rows=2, cols=1, subplot_titles=('Optimal Position Trajectory', 'Optimal Velocity Trajectory'))
 
-# Position Subplot
+fig2 = make_subplots(rows=1, cols=1)
+
+# Position
 fig2.add_trace(go.Scatter(x=t, y=r_opt[0, :], name='x', line=dict(color='red')), row=1, col=1)
 fig2.add_trace(go.Scatter(x=t, y=r_opt[1, :], name='y', line=dict(color='green')), row=1, col=1)
 fig2.add_trace(go.Scatter(x=t, y=r_opt[2, :], name='z', line=dict(color='blue')), row=1, col=1)
 
-# Velocity Subplot
-fig2.add_trace(go.Scatter(x=t, y=v_opt[0, :], name='vx', line=dict(color='red')), row=2, col=1)
-fig2.add_trace(go.Scatter(x=t, y=v_opt[1, :], name='vy', line=dict(color='green')), row=2, col=1)
-fig2.add_trace(go.Scatter(x=t, y=v_opt[2, :], name='vz', line=dict(color='blue')), row=2, col=1)
-
 fig2.update_xaxes(title_text="Time (s)", row=2, col=1)
 fig2.update_yaxes(title_text="Position (m)", row=1, col=1)
-fig2.update_yaxes(title_text="Velocity (m/s)", row=2, col=1)
-fig2.update_layout(height=700, title_text="Kinematics Time Series", showlegend=True)
+fig2.update_layout(height=700, title_text="Convex Optimization Position", showlegend=True)
 fig2.show()
+
+# Velocity
+fig3 = make_subplots(rows=1, cols=1)
+fig3.add_trace(go.Scatter(x=t, y=v_opt[0, :], name='vx', line=dict(color='red')), row=1, col=1)
+fig3.add_trace(go.Scatter(x=t, y=v_opt[1, :], name='vy', line=dict(color='green')), row=1, col=1)
+fig3.add_trace(go.Scatter(x=t, y=v_opt[2, :], name='vz', line=dict(color='blue')), row=1, col=1)
+
+fig3.update_xaxes(title_text="Time (s)", row=2, col=1)
+fig3.update_yaxes(title_text="Velocity (m/s)", row=1, col=1)
+fig3.update_layout(height=700, title_text="Convex Optimization Velocity", showlegend=True)
+fig3.show()
 
 # =============================================================================
 # Figure 3: Optimal Control Inputs
 # =============================================================================
-fig3 = go.Figure()
-fig3.add_trace(go.Scatter(x=t, y=u_opt[0, :], name='ux', line=dict(color='red')))
-fig3.add_trace(go.Scatter(x=t, y=u_opt[1, :], name='uy', line=dict(color='green')))
-fig3.add_trace(go.Scatter(x=t, y=u_opt[2, :], name='uz', line=dict(color='blue')))
+fig4 = go.Figure()
+fig4.add_trace(go.Scatter(x=t, y=u_opt[0, :], name='ux', line=dict(color='red')))
+fig4.add_trace(go.Scatter(x=t, y=u_opt[1, :], name='uy', line=dict(color='green')))
+fig4.add_trace(go.Scatter(x=t, y=u_opt[2, :], name='uz', line=dict(color='blue')))
 
-fig3.update_layout(
+fig4.update_layout(
     title='Optimal Control Input',
     xaxis_title='Time (s)',
     yaxis_title='Control Input (N/kg)',
     showlegend=True
 )
-fig3.show()
+fig4.show()
 
 # =============================================================================
 # Figure 4 & 5: Rocket Mass & Thrust Magnitude Profile
 # =============================================================================
-fig4_5 = make_subplots(rows=2, cols=1, subplot_titles=('Mass History', 'Thrust Magnitude Profile'))
+fig5 = make_subplots(rows=2, cols=1, subplot_titles=('Mass History', 'Thrust Magnitude Profile'))
 
 # Mass plot
-fig4_5.add_trace(go.Scatter(x=t, y=m_opt, name='Mass', line=dict(color='purple')), row=1, col=1)
+fig5.add_trace(go.Scatter(x=t, y=m_opt, name='Mass', line=dict(color='purple')), row=1, col=1)
 
 # Thrust Magnitude plot
 thrust_mag = (1.0 / T_max_thrust) * np.sqrt(np.sum(u_opt**2, axis=0)) * m_opt
-fig4_5.add_trace(go.Scatter(x=t, y=thrust_mag, name='Thrust Profile', line=dict(color='orange')), row=2, col=1)
+fig5.add_trace(go.Scatter(x=t, y=thrust_mag, name='Thrust Profile', line=dict(color='orange')), row=2, col=1)
 
-fig4_5.update_xaxes(title_text="Time (s)", row=2, col=1)
-fig4_5.update_yaxes(title_text="Mass (kg)", row=1, col=1)
-fig4_5.update_yaxes(title_text="Normalized Thrust", row=2, col=1)
-fig4_5.update_layout(height=600, title_text="Vehicle Status Over Time", showlegend=False)
-fig4_5.show()
+fig5.update_xaxes(title_text="Time (s)", row=2, col=1)
+fig5.update_yaxes(title_text="Mass (kg)", row=1, col=1)
+fig5.update_yaxes(title_text="Normalized Thrust", row=2, col=1)
+fig5.update_layout(height=600, title_text="Vehicle Status Over Time", showlegend=False)
+fig5.show()

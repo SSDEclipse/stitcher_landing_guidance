@@ -434,7 +434,7 @@ def plot_3d_data_with_rocket(
                 title="Z Position", range=[z_mid - max_range, z_mid + max_range]
             ),
             bgcolor="rgb(250, 250, 250)",
-            aspectmode="cube",  # Enforces true 1:1:1 geometric scaling
+            aspectmode="cube"
         ),
     )
 
