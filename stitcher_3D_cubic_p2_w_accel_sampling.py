@@ -31,21 +31,15 @@ class StartNode:
     
     def create_and_append_edge(self, target_node):
         t_f = target_node.time
-        if t_f == 0:
-            c_0_array = np.array([0.0, 0.0, 0.0])
-            c_1_array = np.array([0.0, 0.0, 0.0])
-            v_f = self.velocity
-            target_node.update_node_velocity(v_f)
-            target_node.update_node_acceleration(c_0_array + c_1_array * t_f)
-        else:
-            # c_0_array = self.acceleration.copy()
-            c_0_array = target_node.acceleration_p1_start.copy()
-            c_0_array[0] -= planetary_body_config.body_surface_gravity
-            c_1_array = 6.0 / t_f**3 * (target_node.position - self.position - self.velocity * t_f - 0.5*t_f**2 * c_0_array)
-            v_f = self.velocity + c_0_array * t_f + 0.5*t_f**2 * c_1_array
-            c_0_array[0] += planetary_body_config.body_surface_gravity
-            target_node.update_node_velocity(v_f)
-            target_node.update_node_acceleration(c_0_array + c_1_array * t_f)
+
+        c_0_array = target_node.acceleration_p1_start.copy()
+        c_0_array[0] -= planetary_body_config.body_surface_gravity
+        c_1_array = 6.0 / t_f**3 * (target_node.position - self.position - self.velocity * t_f - 0.5*t_f**2 * c_0_array)
+        v_f = self.velocity + c_0_array * t_f + 0.5*t_f**2 * c_1_array
+        c_0_array[0] += planetary_body_config.body_surface_gravity
+        target_node.update_node_velocity(v_f)
+        target_node.update_node_acceleration(c_0_array + c_1_array * t_f)
+
         new_edge = Edge(self, target_node, c_0_array, c_1_array, t_f)
         self.target_edges.append(new_edge)
         target_node.parent_edges.append(new_edge)
@@ -67,13 +61,16 @@ class P1Node:
     
     def create_and_append_edge(self, target_node):
         t_f = target_node.time
-        if t_f == 0:
-            c_0_array = np.array([0.0, 0.0, 0.0])
-            c_1_array = np.array([0.0, 0.0, 0.0])
-        else:
-            c_0_array = 6.0 / t_f**2 * (target_node.position - self.position - self.velocity*t_f) - 2.0 / t_f * (target_node.velocity - self.velocity)
-            c_1_array = -12.0 / t_f**3 * (target_node.position - self.position - self.velocity*t_f) + 6.0 / t_f**2 * (target_node.velocity - self.velocity)
-            c_0_array[0] += planetary_body_config.body_surface_gravity
+
+        # time_matrix_inverse = np.linalg.inv(np.array([[t_f, t_f**2, t_f**3], 
+        #                                               [1.0/2.0*t_f**2, 1.0/3.0*t_f**3, 1.0/4.0*t_f**4], 
+        #                                               [1.0/6.0*t_f**3, 1.0/12.0*t_f**4, 1.0/20.0*t_f**5]]))
+        # need to remove gravity accel from self.accel and target.accels first # coefficient_array = time_matrix_inverse @ np.array([target_node.acceleration - self.acceleration, target_node.velocity - self.velocity - self.acceleration * t_f, target_node.position - self.position - self.velocity * t_f - 1.0/2.0*self.acceleration*t_f**2]).T
+
+        c_0_array = 6.0 / t_f**2 * (target_node.position - self.position - self.velocity*t_f) - 2.0 / t_f * (target_node.velocity - self.velocity)
+        c_1_array = -12.0 / t_f**3 * (target_node.position - self.position - self.velocity*t_f) + 6.0 / t_f**2 * (target_node.velocity - self.velocity)
+        c_0_array[0] += planetary_body_config.body_surface_gravity
+
         new_edge = Edge(self, target_node, c_0_array, c_1_array, t_f)
         self.target_edges.append(new_edge)
         target_node.parent_edges.append(new_edge)
@@ -98,25 +95,15 @@ class P2Node:
     
     def create_and_append_backward_edge(self, target_node):
         t_f = self.time_to_p3
-        if t_f == 0:
-            c_0_array = np.array([0.0, 0.0, 0.0])
-            c_1_array = np.array([0.0, 0.0, 0.0])
-            v_0 = target_node.velocity
-            self.update_node_velocity(v_0)
-            self.update_node_acceleration(c_0_array)
-        else:
-            # global_end_acceleration = target_node.acceleration.copy()
-            global_end_acceleration = self.acceleration_p3_end.copy()
-            global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
-            c_0_array = -2.0 * global_end_acceleration - 6.0 / t_f**2 * (target_node.position - self.position - target_node.velocity*t_f)
-            c_1_array = 3.0 / t_f * global_end_acceleration + 6 / t_f**3 * (target_node.position - self.position - target_node.velocity*t_f)
-            v_0 = target_node.velocity - c_0_array*t_f - 0.5*t_f**2 * c_1_array
-            c_0_array[0] += planetary_body_config.body_surface_gravity
-            self.update_node_velocity(v_0)
-            self.update_node_acceleration(c_0_array)
-            if np.linalg.norm(c_0_array) > 50.001:
-                print(np.linalg.norm(c_0_array))
-                raise ValueError('acceleration here does not match what the sampling should yield')
+
+        global_end_acceleration = self.acceleration_p3_end.copy()
+        global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
+        c_0_array = -2.0 * global_end_acceleration - 6.0 / t_f**2 * (target_node.position - self.position - target_node.velocity*t_f)
+        c_1_array = 3.0 / t_f * global_end_acceleration + 6 / t_f**3 * (target_node.position - self.position - target_node.velocity*t_f)
+        v_0 = target_node.velocity - c_0_array*t_f - 0.5*t_f**2 * c_1_array
+        c_0_array[0] += planetary_body_config.body_surface_gravity
+        self.update_node_velocity(v_0)
+        self.update_node_acceleration(c_0_array)
 
         new_edge = Edge(self, target_node, c_0_array, c_1_array, t_f)
         self.target_edges.append(new_edge)
