@@ -20,10 +20,10 @@ class Vehicle:
 
 
 class StartNode:
-    def __init__(self, position, velocity, acceleration, time):
+    def __init__(self, position, velocity, acceleration_dir, time):
         self.position = position
         self.velocity = velocity
-        self.acceleration = acceleration
+        self.acceleration_dir = acceleration_dir / np.linalg.norm(acceleration_dir)
         self.time = time
         self.target_edges = []
         self.parent_edges = []
@@ -38,7 +38,8 @@ class StartNode:
             target_node.update_node_velocity(v_f)
             target_node.update_node_acceleration(c_0_array + c_1_array * t_f)
         else:
-            c_0_array = self.acceleration.copy()
+            # c_0_array = self.acceleration.copy()
+            c_0_array = target_node.acceleration_p1_start.copy()
             c_0_array[0] -= planetary_body_config.body_surface_gravity
             c_1_array = 6.0 / t_f**3 * (target_node.position - self.position - self.velocity * t_f - 0.5*t_f**2 * c_0_array)
             v_f = self.velocity + c_0_array * t_f + 0.5*t_f**2 * c_1_array
@@ -54,10 +55,11 @@ class StartNode:
         self.velocity = input_velocity
 
 class P1Node:
-    def __init__(self, position, velocity, acceleration, time):
+    def __init__(self, position, velocity, acceleration, acceleration_p1_start, time):
         self.position = position
         self.velocity = velocity
         self.acceleration = acceleration
+        self.acceleration_p1_start = acceleration_p1_start
         self.time = time
         self.target_edges = []
         self.parent_edges = []
@@ -84,10 +86,11 @@ class P1Node:
         self.acceleration = input_acceleration
 
 class P2Node:
-    def __init__(self, position, velocity, acceleration, time, time_to_p3):
+    def __init__(self, position, velocity, acceleration, acceleration_p3_end, time, time_to_p3):
         self.position = position
         self.velocity = velocity
         self.acceleration = acceleration
+        self.acceleration_p3_end = acceleration_p3_end
         self.time = time
         self.time_to_p3 = time_to_p3
         self.target_edges = []
@@ -102,7 +105,8 @@ class P2Node:
             self.update_node_velocity(v_0)
             self.update_node_acceleration(c_0_array)
         else:
-            global_end_acceleration = target_node.acceleration.copy()
+            # global_end_acceleration = target_node.acceleration.copy()
+            global_end_acceleration = self.acceleration_p3_end.copy()
             global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
             c_0_array = -2.0 * global_end_acceleration - 6.0 / t_f**2 * (target_node.position - self.position - target_node.velocity*t_f)
             c_1_array = 3.0 / t_f * global_end_acceleration + 6 / t_f**3 * (target_node.position - self.position - target_node.velocity*t_f)
@@ -126,10 +130,10 @@ class P2Node:
         self.acceleration = input_acceleration
 
 class P3Node:
-    def __init__(self, position, velocity, acceleration):
+    def __init__(self, position, velocity, acceleration_dir):
         self.position = position
         self.velocity = velocity
-        self.acceleration = acceleration
+        self.acceleration_dir = acceleration_dir / np.linalg.norm(acceleration_dir)
         self.target_edges = []
         self.parent_edges = []
 
@@ -248,16 +252,18 @@ def get_nearest_array_neighbors(input_array, input_value):
     
     return input_array[start_idx], input_array[end_idx]
 
-def generate_acceleration_set(acc_mag, acc_azimuth, acc_zenith):
+def generate_acceleration_set(acc_mag_and_thrust_level, acc_azimuth, acc_zenith):
     output = []
-    for i in range(len(acc_mag)):
+    for i in range(len(acc_mag_and_thrust_level)):
         for j in range(len(acc_azimuth)):
             for k in range(len(acc_zenith)):
-                acc_z = -acc_mag[i] * np.sin(acc_zenith[k]) * np.cos(acc_azimuth[j])
-                acc_y = acc_mag[i] * np.sin(acc_zenith[k]) * np.sin(acc_azimuth[j])
-                acc_x = acc_mag[i] * np.cos(acc_zenith[k])
-                output.append(np.array([acc_x, acc_y, acc_z]))
-    output = np.asarray(output)
+                acc_mag = acc_mag_and_thrust_level[i][0]
+                thrust_level = acc_mag_and_thrust_level[i][1]
+                acc_z = -acc_mag * np.sin(acc_zenith[k]) * np.cos(acc_azimuth[j])
+                acc_y = acc_mag * np.sin(acc_zenith[k]) * np.sin(acc_azimuth[j])
+                acc_x = acc_mag * np.cos(acc_zenith[k])
+                output.append([np.array([acc_x, acc_y, acc_z]), thrust_level])
+    # output = np.asarray(output)
     return output
 
 def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_sampled_state, acc_azimuth_sampled_set, acc_zenith_sampled_set):
@@ -275,16 +281,19 @@ def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_s
         for thrust_level in sampled_thrust_level_array:
             thrust_magnitude = thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust
             end_mass = vehicle.wet_mass - thrust_magnitude/vehicle.v_e * time
-            sampled_acc_mag_array.append(thrust_magnitude / end_mass)
+            sampled_acc_mag_array.append([thrust_magnitude / end_mass, thrust_level])
         sampled_accelerations_array = generate_acceleration_set(sampled_acc_mag_array, sampled_acc_azimuth_array, sampled_acc_zenith_array)
-        for acc in sampled_accelerations_array:
-            c_0_array = start_node.acceleration.copy()
+        for acc_and_thrust_level in sampled_accelerations_array:
+            acc = acc_and_thrust_level[0]
+            thrust_level = acc_and_thrust_level[1]
+            c_0_array = start_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.wet_mass
+            phase_1_start_acceleration = c_0_array.copy()
             c_0_array[0] -= planetary_body_config.body_surface_gravity
             global_end_acceleration = acc.copy()
             global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
             c_1_array = (global_end_acceleration - c_0_array) / time
             pos = start_node.position + start_node.velocity * time + 1.0/2.0 * time**2 * c_0_array + 1.0/6.0 * time**3 * c_1_array
-            phase_1_nodes.append(P1Node(pos, None, None, time))
+            phase_1_nodes.append(P1Node(pos, None, None, phase_1_start_acceleration, time))
     return phase_1_nodes
 
 def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, end_node, thrust_level_sampled_state, acc_azimuth_sampled_set, acc_zenith_sampled_set):
@@ -303,22 +312,26 @@ def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, en
             for thrust_level in sampled_thrust_level_array:
                 thrust_magnitude = thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust
                 if thrust_level > 0.5:
-                    end_mass = vehicle.wet_mass - thrust_magnitude/vehicle.v_e * time_to_p3
+                    critical_mass = vehicle.wet_mass - thrust_magnitude/vehicle.v_e * time_to_p3
                 else:
-                    end_mass = vehicle.dry_mass + thrust_magnitude/vehicle.v_e * time_to_p3
-                sampled_acc_mag_array.append(thrust_magnitude / end_mass)
-                if thrust_magnitude / end_mass > 50.0:
-                    breakpoint()
+                    critical_mass = vehicle.dry_mass + thrust_magnitude/vehicle.v_e * time_to_p3
+                sampled_acc_mag_array.append([thrust_magnitude / critical_mass, thrust_level])
             sampled_accelerations_array = generate_acceleration_set(sampled_acc_mag_array, sampled_acc_azimuth_array, sampled_acc_zenith_array)
-            for acc in sampled_accelerations_array:
+            for acc_and_thrust_level in sampled_accelerations_array:
+                acc = acc_and_thrust_level[0]
+                thrust_level = acc_and_thrust_level[1]
                 global_start_acceleration = acc.copy()
                 global_start_acceleration[0] -= planetary_body_config.body_surface_gravity
                 c_0_array = global_start_acceleration
-                global_end_acceleration = end_node.acceleration.copy()
+                if thrust_level > 0.5:
+                    global_end_acceleration = end_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.wet_mass
+                else:
+                    global_end_acceleration = end_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.dry_mass
+                p3_end_acceleration = global_end_acceleration.copy()
                 global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
                 c_1_array = (global_end_acceleration - c_0_array) / time_to_p3
                 pos = end_node.position - end_node.velocity * time_to_p3 + 1.0/2.0 * time_to_p3**2 * c_0_array + 1.0/3.0 * time_to_p3**3 * c_1_array
-                phase_2_nodes.append(P2Node(pos, None, None, time, time_to_p3))
+                phase_2_nodes.append(P2Node(pos, None, None, p3_end_acceleration, time, time_to_p3))
 
     return phase_2_nodes
 
@@ -606,12 +619,14 @@ final_r = np.array([0.0, 0.0, 0.0])
 final_v = np.array([0.0, 0.0, 0.0])
 initial_a = np.array([34.0, 19.0, -5.0])
 final_a = np.array([40.0, 0.0, 12.0])
+initial_a = initial_a / np.linalg.norm(initial_a)
+final_a = final_a / np.linalg.norm(final_a)
 
 lander = Vehicle(150000, 135000, 6000000, 2000000, 320)
 
-constraints = Constraints(interphase_max_angle=180*np.pi/180)
+constraints = Constraints(interphase_max_angle=40*np.pi/180)
 
-p1_time_sampled_set = SampledSet(1.0, 10, 6)
+p1_time_sampled_set = SampledSet(1.0, 5, 6)
 
 p1_thrust_state = SampledSet(0.1, 0.9, 2)
 azimuth_v_0 = np.arctan2(initial_v[2], initial_v[1])
@@ -635,8 +650,8 @@ p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 4)
 p1_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
 p1_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
 
-p2_time_sampled_set = SampledSet(1.0, 10, 10)
-p2_time_to_p3_sampled_set = SampledSet(2.0, 10, 6)
+p2_time_sampled_set = SampledSet(1.0, 5, 10)
+p2_time_to_p3_sampled_set = SampledSet(2.0, 5, 6)
 p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 4)
 p2_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
 p2_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
