@@ -1,5 +1,4 @@
 import numpy as np
-import poliastro
 import constants_and_helpers
 import planetary_body_config
 
