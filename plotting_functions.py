@@ -270,6 +270,7 @@ def plot_3d_data_with_rocket(
     rocket_length=40.0,  # Constant length of the rocket cylinder
     rocket_radius=4.5,  # Constant radius of the rocket body
     thrust_scale=3,  # Scaling factor for thrust vector size
+    polygon_coords=None
 ):
     fig = go.Figure()
 
@@ -404,6 +405,26 @@ def plot_3d_data_with_rocket(
             name="Thrust Vector",
         )
     )
+
+    if polygon_coords is not None:
+            # Extract X, Y, Z from the (N, 3) numpy array
+            poly_x = -polygon_coords[:, 2]
+            poly_y = polygon_coords[:, 1]
+            poly_z = polygon_coords[:, 0]
+
+            fig.add_trace(
+                go.Mesh3d(
+                    x=poly_x,
+                    y=poly_y,
+                    z=poly_z,
+                    color="black",
+                    opacity=0.3,
+                    alphahull=0, # Triangulates based on X and Y coordinates
+                    name="Keepout Polygon",
+                    showlegend=True
+                )
+            )
+
 
     all_x = np.concatenate([data_x, cyl_x])
     all_y = np.concatenate([data_y, cyl_y])
