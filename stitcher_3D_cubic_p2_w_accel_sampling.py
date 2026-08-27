@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import plotting_functions
 import copy
 import time
+import random
 
 
 class Vehicle:
@@ -424,7 +425,7 @@ def prune_edges(input_mass_array, input_v_e, thrust_lower_bound, thrust_upper_bo
 
 
 
-def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, p1_sampled_set_dict, p2_sampled_set_dict):
+def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, p1_sampled_set_dict, p2_sampled_set_dict, process_plot=False):
 
     start_node = StartNode(initial_r, initial_v, initial_a, 0.0)
 
@@ -458,6 +459,10 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
 
     T_p1_edge_cost_pruning = time.time() - last_solver_checkpoint_time
 
+    if process_plot:
+        plot_output_num_edges = 10
+        plot_output_p1_edges = random.sample(start_node.target_edges, plot_output_num_edges)
+
     # create phase 3 nodes
     phase_3_nodes = generate_phase_3_nodes(final_r, final_v, final_a)
 
@@ -478,6 +483,10 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
         total_p3_edges += 1
     T_p3_edge_generation = time.time() - last_solver_checkpoint_time
 
+    if process_plot:
+        plot_output_num_edges = 10
+        plot_output_p3_edges = random.sample(phase_3_node.parent_edges, plot_output_num_edges)
+
     # prune phase 3 edges that violate constraints based on worst case mass
     last_solver_checkpoint_time = time.time()
     # for phase_3_node in phase_3_nodes:
@@ -495,6 +504,17 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
         for phase_2_node in phase_2_nodes:
             phase_1_node.create_and_append_edge(phase_2_node)
     T_p2_edge_generation = time.time() - last_solver_checkpoint_time
+
+
+
+    if process_plot:
+        plot_output_p2_edges = []
+        for p1_edge in plot_output_p1_edges:
+            for p2_edge in p1_edge.target_node.target_edges:
+                if p2_edge.target_node.target_edges[0] in plot_output_p3_edges:
+                    plot_output_p2_edges.append(p2_edge)
+
+
 
     last_solver_checkpoint_time = time.time()
 
@@ -525,6 +545,30 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
             raise ValueError
 
 
+    if process_plot:
+        valid_plot_output_p1_edges = []
+        valid_plot_output_p3_edges = []
+        for p1_edge in plot_output_p1_edges:
+            if p1_edge in start_node.target_edges:
+                valid_plot_output_p1_edges.append(p1_edge)
+        for p3_edge in plot_output_p3_edges:
+            if p3_edge in phase_3_node.parent_edges:
+                valid_plot_output_p3_edges.append(p3_edge)
+
+        valid_plot_output_p2_edges = []
+        for p1_edge in valid_plot_output_p1_edges:
+            for p2_edge in p1_edge.target_node.target_edges:
+                if p2_edge.target_node.target_edges[0] in valid_plot_output_p3_edges:
+                    valid_plot_output_p2_edges.append(p2_edge)
+                    
+        # print(len(plot_output_p1_edges))
+        # print(len(plot_output_p3_edges))
+        # print(len(plot_output_p2_edges))
+        # print()
+        # print(len(valid_plot_output_p1_edges))
+        # print(len(valid_plot_output_p3_edges))
+        # print(len(valid_plot_output_p2_edges))
+        # breakpoint()
 
 
     total_edges = 0
@@ -536,6 +580,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
     end_masses = []
     best_mass = 0.0
     total_valid_edges = 0
+    valid_p3_edges = []
     for phase_2_node in phase_2_nodes:
         if len(phase_2_node.target_edges) != 1:
             raise ValueError('should be 1 phase 2 target edge')
@@ -545,6 +590,7 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
             # need to have this be a prune_edges call instead
             if target_edge.check_cubic_accel_thrust_bounds(current_edge_start_mass, vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust):
                 if target_edge.check_position_keepout(constraints):
+                    valid_p3_edges.append(target_edge)
                     target_edge.compute_cubic_accel_mass_consumed(current_edge_start_mass, vehicle.v_e)
                     total_valid_edges += 1
                     touchdown_mass = target_edge.end_mass
@@ -558,6 +604,8 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
                         optimal_edge_2 = copy.copy(parent_edge)
                         optimal_edge_1 = copy.copy(optimal_node_1.parent_edges[0])
     T_p3_edge_cost_pruning = time.time() - last_solver_checkpoint_time
+
+
     
     new_p1_time_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['time'].lower_bound, p1_sampled_set_dict['time'].upper_bound, p1_sampled_set_dict['time'].num_points), optimal_edge_1.t_f), 5)
     new_p1_pos_x_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['pos_x'].lower_bound, p1_sampled_set_dict['pos_x'].upper_bound, p1_sampled_set_dict['pos_x'].num_points), optimal_node_1.position[0]), 5)
@@ -594,9 +642,9 @@ def generate_stitcher_trajectory_constant_accel(vehicle, initial_r, initial_v, i
                         'T_p2_edge_cost_pruning': T_p2_edge_cost_pruning,
                         'T_p3_edge_cost_pruning': T_p3_edge_cost_pruning}
     
-    
-    
-    
+
+
+
     
     
 
@@ -628,11 +676,11 @@ final_a = final_a / np.linalg.norm(final_a)
 
 lander = Vehicle(150000, 135000, 6000000, 2000000, 320)
 tower_coords = np.array([[0, -10, 0], [0, 10, 0], [0, -10, 45], [0, 10, 45], [160, -10, 0], [160, 10, 0], [160, -10, 45], [160, 10, 45]])
-# tower_coords = np.array([[0.0, 0.0, 0.0]])
+tower_coords = np.array([[0.0, 0.0, 0.0]])
 constraints = Constraints(position_keepout_coords=tower_coords)
 
 tower_plotting_coords = tower_coords
-tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [80, -10, 15], [80, 10, 15], [80, -10, 35], [80, 10, 35]])
+# tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [80, -10, 15], [80, 10, 15], [80, -10, 35], [80, 10, 35]])
 
 p1_time_sampled_set = SampledSet(1.5, 5, 6)
 
@@ -685,7 +733,7 @@ p2_sampled_set_dict = {
     'acc_zenith': p2_accel_zenith_sampled_set
 }
 
-guidance_output = generate_stitcher_trajectory_constant_accel(lander, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, p1_sampled_set_dict, p2_sampled_set_dict)
+guidance_output = generate_stitcher_trajectory_linear_cubic_accel(lander, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, p1_sampled_set_dict, p2_sampled_set_dict, process_plot=True)
 
 
 
