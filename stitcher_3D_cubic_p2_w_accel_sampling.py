@@ -4,6 +4,7 @@ import cartesian_dynamics
 import planetary_body_config
 import matplotlib.pyplot as plt
 import plotting_functions
+import animation_functions
 import copy
 import time
 import random
@@ -257,7 +258,7 @@ class Constraints:
             self.position_keepout_min_z = np.min(position_keepout_coords[:,2])
         
 class OutputData:
-    def __init__(self, start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, p1_nearest_neighbors_dict, p2_nearest_neighbors_dict, total_edges, total_valid_edges, end_masses, solver_durations):
+    def __init__(self, start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, p1_nearest_neighbors_dict, p2_nearest_neighbors_dict, total_edges, total_valid_edges, end_masses, solver_durations, process_plot_outputs=None):
         self.start_node = start_node
         self.optimal_node_1 = optimal_node_1
         self.optimal_node_2 = optimal_node_2
@@ -272,7 +273,50 @@ class OutputData:
         self.end_masses = end_masses
         self.solver_durations = solver_durations
 
+        if process_plot_outputs is not None:
+            self.initial_plot_output_p1_edges = process_plot_outputs[0]
+            self.initial_plot_output_p2_edges = process_plot_outputs[1]
+            self.initial_plot_output_p3_edges = process_plot_outputs[2]
+            self.valid_plot_output_p1_edges = process_plot_outputs[3]
+            self.valid_plot_output_p2_edges = process_plot_outputs[4]
+            self.valid_plot_output_p3_edges = process_plot_outputs[5]
 
+
+import numpy as np
+
+def compute_trajectory_states(t, c0, c1, c2, c3, r0, v0, g):
+
+    t = np.asarray(t)
+    c0 = np.asarray(c0)
+    c1 = np.asarray(c1)
+    c2 = np.asarray(c2)
+    c3 = np.asarray(c3)
+    r0 = np.asarray(r0)
+    v0 = np.asarray(v0)
+    
+    g_vec = np.array([g, 0.0, 0.0])
+    
+    t_col = t[:, np.newaxis]
+    
+    r = (r0 
+         + (v0 * t_col) 
+         + (0.5 * (c0 - g_vec) * t_col**2) 
+         + ((1.0 / 6.0) * c1 * t_col**3) 
+         + ((1.0 / 12.0) * c2 * t_col**4) 
+         + ((1.0 / 20.0) * c3 * t_col**5))
+    
+    v = (v0 
+         + ((c0 - g_vec) * t_col) 
+         + (0.5 * c1 * t_col**2) 
+         + ((1.0 / 3.0) * c2 * t_col**3) 
+         + ((1.0 / 4.0) * c3 * t_col**4))
+    
+    u = (c0 
+         + (c1 * t_col) 
+         + (c2 * t_col**2) 
+         + (c3 * t_col**3))
+    
+    return r, v, u
 
 def get_nearest_array_neighbors(input_array, input_value):
     idx = np.searchsorted(input_array, input_value)
@@ -645,10 +689,10 @@ def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_
 
 
 
-    
-    
-
-    output = OutputData(start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, new_p1_sampled_set_dict, new_p2_sampled_set_dict, total_edges, total_valid_edges, end_masses, solver_durations)
+    if process_plot:
+        output = OutputData(start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, new_p1_sampled_set_dict, new_p2_sampled_set_dict, total_edges, total_valid_edges, end_masses, solver_durations, [plot_output_p1_edges, plot_output_p2_edges, plot_output_p3_edges, valid_plot_output_p1_edges, valid_plot_output_p2_edges, valid_plot_output_p3_edges])
+    else:
+        output = OutputData(start_node, optimal_node_1, optimal_node_2, optimal_node_3, optimal_edge_1, optimal_edge_2, optimal_edge_3, new_p1_sampled_set_dict, new_p2_sampled_set_dict, total_edges, total_valid_edges, end_masses, solver_durations)
     return output
 
 
@@ -662,12 +706,12 @@ final_a = np.array([1.0, -0.25, 0.0])
 
 lander = Vehicle(2000, 1000, 10000, 3000, 300)
 
-initial_r = np.array([500.0, 100.0, 200.0])
-initial_v = np.array([-80.0, -40.0, -20.0])
-initial_a = np.array([10.0, 8.04, -3.66])
-# initial_r = np.array([500.0, 100.0, 0.0])
-# initial_v = np.array([-80.0, 0.0, 0.0])
-# initial_a = np.array([0.0, -19.0, 0.0])
+# initial_r = np.array([500.0, 100.0, 200.0])
+# initial_v = np.array([-80.0, -40.0, -20.0])
+# initial_a = np.array([10.0, 8.04, -3.66])
+initial_r = np.array([500.0, 0.0, 80.0])
+initial_v = np.array([-80.0, 0.0, 0.0])
+initial_a = np.array([0.0, 0.0, -1.0])
 final_r = np.array([0.0, 0.0, 0.0])
 final_v = np.array([0.0, 0.0, 0.0])
 final_a = np.array([13.0, -0.0, 0.0])
@@ -675,14 +719,14 @@ initial_a = initial_a / np.linalg.norm(initial_a)
 final_a = final_a / np.linalg.norm(final_a)
 
 lander = Vehicle(150000, 135000, 6000000, 2000000, 320)
-tower_coords = np.array([[0, -10, 0], [0, 10, 0], [0, -10, 45], [0, 10, 45], [160, -10, 0], [160, 10, 0], [160, -10, 45], [160, 10, 45]])
-tower_coords = np.array([[0.0, 0.0, 0.0]])
+tower_coords = np.array([[0, -20, 5], [0, 20, 5], [0, -20, 45], [0, 20, 45], [120, -20, 5], [120, 20, 5], [120, -20, 45], [120, 20, 45]])
+# tower_coords = np.array([[0.0, 0.0, 0.0]])
 constraints = Constraints(position_keepout_coords=tower_coords)
 
 tower_plotting_coords = tower_coords
-# tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [80, -10, 15], [80, 10, 15], [80, -10, 35], [80, 10, 35]])
+tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
 
-p1_time_sampled_set = SampledSet(1.5, 5, 6)
+p1_time_sampled_set = SampledSet(1.5, 10, 6)
 
 p1_thrust_state = SampledSet(0.1, 0.9, 2)
 azimuth_v_0 = np.arctan2(initial_v[2], initial_v[1])
@@ -706,8 +750,8 @@ p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 4)
 p1_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
 p1_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
 
-p2_time_sampled_set = SampledSet(0.1, 5, 6)
-p2_time_to_p3_sampled_set = SampledSet(1.5, 5, 6)
+p2_time_sampled_set = SampledSet(1.5, 10, 6)
+p2_time_to_p3_sampled_set = SampledSet(1.5, 10, 6)
 p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 4)
 p2_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
 p2_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
@@ -770,37 +814,49 @@ num_p2_points_plotting = int(guidance_output.optimal_edge_2.t_f/total_time * num
 num_p3_points_plotting = num_total_points_plotting - num_p1_points_plotting - num_p2_points_plotting
 
 t_p_1 = np.linspace(0, guidance_output.optimal_edge_1.t_f, num_p1_points_plotting)
-r_x_p_1 = guidance_output.start_node.position[0] + guidance_output.start_node.velocity[0]*t_p_1 + 0.5*(guidance_output.optimal_edge_1.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_1**2 + 1.0/6.0*guidance_output.optimal_edge_1.c_1_array[0]*t_p_1**3
-r_y_p_1 = guidance_output.start_node.position[1] + guidance_output.start_node.velocity[1]*t_p_1 + 0.5*(guidance_output.optimal_edge_1.c_0_array[1])*t_p_1**2 + 1.0/6.0*guidance_output.optimal_edge_1.c_1_array[1]*t_p_1**3
-r_z_p_1 = guidance_output.start_node.position[2] + guidance_output.start_node.velocity[2]*t_p_1 + 0.5*(guidance_output.optimal_edge_1.c_0_array[2])*t_p_1**2 + 1.0/6.0*guidance_output.optimal_edge_1.c_1_array[2]*t_p_1**3
-v_x_p_1 = guidance_output.start_node.velocity[0] + (guidance_output.optimal_edge_1.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_1 + 1.0/2.0*guidance_output.optimal_edge_1.c_1_array[0]*t_p_1**2
-v_y_p_1 = guidance_output.start_node.velocity[1] + (guidance_output.optimal_edge_1.c_0_array[1])*t_p_1 + 1.0/2.0*guidance_output.optimal_edge_1.c_1_array[1]*t_p_1**2
-v_z_p_1 = guidance_output.start_node.velocity[2] + (guidance_output.optimal_edge_1.c_0_array[2])*t_p_1 + 1.0/2.0*guidance_output.optimal_edge_1.c_1_array[2]*t_p_1**2
-u_x_p_1 = (guidance_output.optimal_edge_1.c_0_array[0]) + guidance_output.optimal_edge_1.c_1_array[0]*t_p_1
-u_y_p_1 = (guidance_output.optimal_edge_1.c_0_array[1]) + guidance_output.optimal_edge_1.c_1_array[1]*t_p_1
-u_z_p_1 = (guidance_output.optimal_edge_1.c_0_array[2]) + guidance_output.optimal_edge_1.c_1_array[2]*t_p_1
+r_p_1, v_p_1, u_p_1 = compute_trajectory_states(
+    t = t_p_1,
+    c0 = guidance_output.optimal_edge_1.c_0_array,
+    c1 = guidance_output.optimal_edge_1.c_1_array,
+    c2 = guidance_output.optimal_edge_1.c_2_array,
+    c3 = guidance_output.optimal_edge_1.c_3_array,
+    r0 = guidance_output.start_node.position,
+    v0 = guidance_output.start_node.velocity,
+    g = planetary_body_config.body_surface_gravity
+)
+r_x_p_1, r_y_p_1, r_z_p_1 = r_p_1[:, 0], r_p_1[:, 1], r_p_1[:, 2]
+v_x_p_1, v_y_p_1, v_z_p_1 = v_p_1[:, 0], v_p_1[:, 1], v_p_1[:, 2]
+u_x_p_1, u_y_p_1, u_z_p_1 = u_p_1[:, 0], u_p_1[:, 1], u_p_1[:, 2]
 
 t_p_2 = np.linspace(0.0, guidance_output.optimal_edge_2.t_f, num_p2_points_plotting)
-r_x_p_2 = guidance_output.optimal_node_1.position[0] + guidance_output.optimal_node_1.velocity[0]*t_p_2 + 0.5*(guidance_output.optimal_edge_2.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_2**2 + 1.0/6.0*guidance_output.optimal_edge_2.c_1_array[0]*t_p_2**3 + 1.0/12.0*guidance_output.optimal_edge_2.c_2_array[0]*t_p_2**4 + 1.0/20.0*guidance_output.optimal_edge_2.c_3_array[0]*t_p_2**5
-r_y_p_2 = guidance_output.optimal_node_1.position[1] + guidance_output.optimal_node_1.velocity[1]*t_p_2 + 0.5*(guidance_output.optimal_edge_2.c_0_array[1])*t_p_2**2 + 1.0/6.0*guidance_output.optimal_edge_2.c_1_array[1]*t_p_2**3 + 1.0/12.0*guidance_output.optimal_edge_2.c_2_array[1]*t_p_2**4 + 1.0/20.0*guidance_output.optimal_edge_2.c_3_array[1]*t_p_2**5
-r_z_p_2 = guidance_output.optimal_node_1.position[2] + guidance_output.optimal_node_1.velocity[2]*t_p_2 + 0.5*(guidance_output.optimal_edge_2.c_0_array[2])*t_p_2**2 + 1.0/6.0*guidance_output.optimal_edge_2.c_1_array[2]*t_p_2**3 + 1.0/12.0*guidance_output.optimal_edge_2.c_2_array[2]*t_p_2**4 + 1.0/20.0*guidance_output.optimal_edge_2.c_3_array[2]*t_p_2**5
-v_x_p_2 = guidance_output.optimal_node_1.velocity[0] + (guidance_output.optimal_edge_2.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_2 + 1.0/2.0*guidance_output.optimal_edge_2.c_1_array[0]*t_p_2**2 + 1.0/3.0*guidance_output.optimal_edge_2.c_2_array[0]*t_p_2**3 + 1.0/4.0*guidance_output.optimal_edge_2.c_3_array[0]*t_p_2**4
-v_y_p_2 = guidance_output.optimal_node_1.velocity[1] + (guidance_output.optimal_edge_2.c_0_array[1])*t_p_2 + 1.0/2.0*guidance_output.optimal_edge_2.c_1_array[1]*t_p_2**2 + 1.0/3.0*guidance_output.optimal_edge_2.c_2_array[1]*t_p_2**3 + 1.0/4.0*guidance_output.optimal_edge_2.c_3_array[1]*t_p_2**4
-v_z_p_2 = guidance_output.optimal_node_1.velocity[2] + (guidance_output.optimal_edge_2.c_0_array[2])*t_p_2 + 1.0/2.0*guidance_output.optimal_edge_2.c_1_array[2]*t_p_2**2 + 1.0/3.0*guidance_output.optimal_edge_2.c_2_array[2]*t_p_2**3 + 1.0/4.0*guidance_output.optimal_edge_2.c_3_array[2]*t_p_2**4
-u_x_p_2 = (guidance_output.optimal_edge_2.c_0_array[0]) + guidance_output.optimal_edge_2.c_1_array[0]*t_p_2 + guidance_output.optimal_edge_2.c_2_array[0]*t_p_2**2 + guidance_output.optimal_edge_2.c_3_array[0]*t_p_2**3
-u_y_p_2 = (guidance_output.optimal_edge_2.c_0_array[1]) + guidance_output.optimal_edge_2.c_1_array[1]*t_p_2 + guidance_output.optimal_edge_2.c_2_array[1]*t_p_2**2 + guidance_output.optimal_edge_2.c_3_array[1]*t_p_2**3
-u_z_p_2 = (guidance_output.optimal_edge_2.c_0_array[2]) + guidance_output.optimal_edge_2.c_1_array[2]*t_p_2 + guidance_output.optimal_edge_2.c_2_array[2]*t_p_2**2 + guidance_output.optimal_edge_2.c_3_array[2]*t_p_2**3
+r_p_2, v_p_2, u_p_2 = compute_trajectory_states(
+    t = t_p_2,
+    c0 = guidance_output.optimal_edge_2.c_0_array,
+    c1 = guidance_output.optimal_edge_2.c_1_array,
+    c2 = guidance_output.optimal_edge_2.c_2_array,
+    c3 = guidance_output.optimal_edge_2.c_3_array,
+    r0 = guidance_output.optimal_node_1.position,
+    v0 = guidance_output.optimal_node_1.velocity,
+    g = planetary_body_config.body_surface_gravity
+)
+r_x_p_2, r_y_p_2, r_z_p_2 = r_p_2[:, 0], r_p_2[:, 1], r_p_2[:, 2]
+v_x_p_2, v_y_p_2, v_z_p_2 = v_p_2[:, 0], v_p_2[:, 1], v_p_2[:, 2]
+u_x_p_2, u_y_p_2, u_z_p_2 = u_p_2[:, 0], u_p_2[:, 1], u_p_2[:, 2]
 
 t_p_3 = np.linspace(0.0, guidance_output.optimal_edge_3.t_f, num_p3_points_plotting)
-r_x_p_3 = guidance_output.optimal_node_2.position[0] + guidance_output.optimal_node_2.velocity[0]*t_p_3 + 0.5*(guidance_output.optimal_edge_3.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_3**2 + 1.0/6.0*guidance_output.optimal_edge_3.c_1_array[0]*t_p_3**3
-r_y_p_3 = guidance_output.optimal_node_2.position[1] + guidance_output.optimal_node_2.velocity[1]*t_p_3 + 0.5*(guidance_output.optimal_edge_3.c_0_array[1])*t_p_3**2 + 1.0/6.0*guidance_output.optimal_edge_3.c_1_array[1]*t_p_3**3
-r_z_p_3 = guidance_output.optimal_node_2.position[2] + guidance_output.optimal_node_2.velocity[2]*t_p_3 + 0.5*(guidance_output.optimal_edge_3.c_0_array[2])*t_p_3**2 + 1.0/6.0*guidance_output.optimal_edge_3.c_1_array[2]*t_p_3**3
-v_x_p_3 = guidance_output.optimal_node_2.velocity[0] + (guidance_output.optimal_edge_3.c_0_array[0] - planetary_body_config.body_surface_gravity)*t_p_3 + 1.0/2.0*guidance_output.optimal_edge_3.c_1_array[0]*t_p_3**2
-v_y_p_3 = guidance_output.optimal_node_2.velocity[1] + (guidance_output.optimal_edge_3.c_0_array[1])*t_p_3 + 1.0/2.0*guidance_output.optimal_edge_3.c_1_array[1]*t_p_3**2
-v_z_p_3 = guidance_output.optimal_node_2.velocity[2] + (guidance_output.optimal_edge_3.c_0_array[2])*t_p_3 + 1.0/2.0*guidance_output.optimal_edge_3.c_1_array[2]*t_p_3**2
-u_x_p_3 = (guidance_output.optimal_edge_3.c_0_array[0]) + guidance_output.optimal_edge_3.c_1_array[0]*t_p_3
-u_y_p_3 = (guidance_output.optimal_edge_3.c_0_array[1]) + guidance_output.optimal_edge_3.c_1_array[1]*t_p_3
-u_z_p_3 = (guidance_output.optimal_edge_3.c_0_array[2]) + guidance_output.optimal_edge_3.c_1_array[2]*t_p_3
+r_p_3, v_p_3, u_p_3 = compute_trajectory_states(
+    t = t_p_3,
+    c0 = guidance_output.optimal_edge_3.c_0_array,
+    c1 = guidance_output.optimal_edge_3.c_1_array,
+    c2 = guidance_output.optimal_edge_3.c_2_array,
+    c3 = guidance_output.optimal_edge_3.c_3_array,
+    r0 = guidance_output.optimal_node_2.position,
+    v0 = guidance_output.optimal_node_2.velocity,
+    g = planetary_body_config.body_surface_gravity
+)
+r_x_p_3, r_y_p_3, r_z_p_3 = r_p_3[:, 0], r_p_3[:, 1], r_p_3[:, 2]
+v_x_p_3, v_y_p_3, v_z_p_3 = v_p_3[:, 0], v_p_3[:, 1], v_p_3[:, 2]
+u_x_p_3, u_y_p_3, u_z_p_3 = u_p_3[:, 0], u_p_3[:, 1], u_p_3[:, 2]
 
 t_plotting = np.concatenate((t_p_1, t_p_2 + guidance_output.optimal_edge_1.t_f, t_p_3 + guidance_output.optimal_edge_1.t_f + guidance_output.optimal_edge_2.t_f))
 r_x_plotting = np.concatenate((r_x_p_1, r_x_p_2, r_x_p_3))
@@ -814,6 +870,8 @@ u_y_plotting = np.concatenate((u_y_p_1, u_y_p_2, u_y_p_3))
 u_z_plotting = np.concatenate((u_z_p_1, u_z_p_2, u_z_p_3))
 
 plotting_functions.plot_3d_data_with_rocket(t_plotting, -r_z_plotting, r_y_plotting, r_x_plotting, t_plotting[::20], -u_z_plotting[::20], u_y_plotting[::20], u_x_plotting[::20], rocket_length=40, rocket_radius=4.5, thrust_scale=1.5, polygon_coords=tower_plotting_coords)
+
+animation_functions.plot_3d_data_with_rocket(t_plotting, -r_z_plotting, r_y_plotting, r_x_plotting, t_plotting, -u_z_plotting, u_y_plotting, u_x_plotting, rocket_length=40, rocket_radius=4.5, thrust_scale=1.5, polygon_coords=tower_plotting_coords, fps=10)
 
 plotting_functions.plot_2d_data([t_plotting, t_plotting, t_plotting], [r_x_plotting, r_y_plotting, r_z_plotting], ['rx', 'ry', 'rz'], 'Sampling-based Position vs Time', 'Time (s)', 'Position (m)')
 
