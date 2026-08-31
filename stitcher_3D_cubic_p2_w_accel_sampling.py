@@ -322,20 +322,14 @@ def compute_trajectory_states(t, c0, c1, c2, c3, r0, v0, g):
 def get_nearest_array_neighbors(input_array, input_value):
     idx = np.searchsorted(input_array, input_value)
     
-    if idx < len(input_array) and input_array[idx] == input_value:
-        exact_idx = idx
+    if idx == 0:
+        return input_array[0], input_array[1]
+        
+    elif idx == len(input_array):
+        return input_array[-2], input_array[-1]
+        
     else:
-        if idx == 0:
-            exact_idx = 0
-        elif idx == len(input_array):
-            exact_idx = len(input_array) - 1
-        else:
-            exact_idx = idx if abs(input_array[idx] - input_value) < abs(input_array[idx-1] - input_value) else idx - 1
-
-    start_idx = max(0, exact_idx - 1)
-    end_idx = min(len(input_array)-1, exact_idx + 1) 
-    
-    return input_array[start_idx], input_array[end_idx]
+        return input_array[idx - 1], input_array[idx]
 
 def generate_acceleration_set(acc_mag_and_thrust_level, acc_azimuth, acc_zenith):
     output = []
@@ -652,7 +646,7 @@ def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_
 
 
     p1_acc_azimuth = np.arctan2(optimal_node_1.acceleration[1], optimal_node_1.acceleration[2])
-    if not (p1_sampled_set_dict['acc_azimuth'].lower_bound < p1_acc_azimuth and p1_acc_azimuth < p1_sampled_set_dict['acc_azimuth'].upper_bound):
+    if not (p1_sampled_set_dict['acc_azimuth'].lower_bound <= p1_acc_azimuth and p1_acc_azimuth <= p1_sampled_set_dict['acc_azimuth'].upper_bound):
         if p1_acc_azimuth > p1_sampled_set_dict['acc_azimuth'].upper_bound:
             p1_acc_azimuth -= 2*np.pi
         else:
@@ -679,7 +673,6 @@ def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_
     new_p2_acc_zenith_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['acc_zenith'].lower_bound, p2_sampled_set_dict['acc_zenith'].upper_bound, p2_sampled_set_dict['acc_zenith'].num_points), p2_acc_zenith), p2_sampled_set_dict['acc_zenith'].num_points)
     # new_p2_acc_azimuth_sampled_set = SampledSet(p2_acc_azimuth, p2_acc_azimuth, 2)
 
-    # breakpoint()
 
     new_p1_sampled_set_dict = {
         'time': new_p1_time_sampled_set,
@@ -718,32 +711,32 @@ def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_
 
 
 
-initial_r = np.array([200.0, 30.0, 0.0])
-initial_v = np.array([-6.0, -0.0, 0.0])
-initial_a = np.array([-3.7, -4.0, 0.0])
-final_a = np.array([1.0, -0.25, 0.0])
+initial_r = np.array([2400.0, 3400.0, 0.0])
+initial_v = np.array([-40.0, 45.0, 0.0])
+initial_a = np.array([1.0, -1.0, 0.0])
+final_r = np.array([0.0, 0.0, 0.0])
+final_v = np.array([0.0, 0.0, 0.0])
+final_a = np.array([1.0, 0.0, 0.0])
 
-lander = Vehicle(2000, 1000, 10000, 3000, 300)
+lander = Vehicle(2000, 1700, 0.8*24000, 0.2*24000, 204)
 
 # initial_r = np.array([500.0, 100.0, 200.0])
 # initial_v = np.array([-80.0, -40.0, -20.0])
 # initial_a = np.array([10.0, 8.04, -3.66])
-initial_r = np.array([500.0, 0.0, 100.0])
-initial_v = np.array([-80.0, 0.0, 0.0])
-initial_a = np.array([0.0, 0.0, -1.0])
-final_r = np.array([0.0, 0.0, 0.0])
-final_v = np.array([0.0, 0.0, 0.0])
-final_a = np.array([1.0, -0.0, 0.0])
-initial_a = initial_a / np.linalg.norm(initial_a)
-final_a = final_a / np.linalg.norm(final_a)
+# initial_r = np.array([500.0, 0.0, 100.0])
+# initial_v = np.array([-80.0, 0.0, 0.0])
+# initial_a = np.array([0.0, 0.0, -1.0])
+# final_r = np.array([0.0, 0.0, 0.0])
+# final_v = np.array([0.0, 0.0, 0.0])
+# final_a = np.array([1.0, -0.0, 0.0])
+# initial_a = initial_a / np.linalg.norm(initial_a)
+# final_a = final_a / np.linalg.norm(final_a)
 
-lander = Vehicle(150000, 135000, 6000000, 2000000, 320)
-tower_coords = np.array([[0, -20, 5], [0, 20, 5], [0, -20, 45], [0, 20, 45], [120, -20, 5], [120, 20, 5], [120, -20, 45], [120, 20, 45]])
-# tower_coords = np.array([[-1000.0, 0.0, 0.0]])
+tower_coords = np.array([[0.0, 0.0, 0.0]])
 constraints = Constraints(position_keepout_coords=tower_coords)
 
 tower_plotting_coords = tower_coords
-tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
+# tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
 
 
 
@@ -751,28 +744,25 @@ tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 1
 
 
 
-p1_time_sampled_set = SampledSet(1.5, 10, 6)
-p1_thrust_state = SampledSet(0.1, 0.9, 2)
+p1_time_sampled_set = SampledSet(1.5, 50, 6)
+p1_thrust_state = SampledSet(0.01, 0.99, 2)
 azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
-initial_los_yz = np.array([final_r[1] - initial_r[1], final_r[2] - initial_r[2]])
+initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
 if np.cross(initial_los_yz, initial_v)[0] > 0:
     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
 else:
     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
-p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
+p1_accel_zenith_sampled_set = SampledSet(0, 90*np.pi/180, 5)
 
-p2_thrust_state = SampledSet(0.1, 0.9, 2)
-azimuth_v_0 = np.arctan2(initial_v[2], initial_v[1])
-initial_los_yz = np.array([final_r[1] - initial_r[1], final_r[2] - initial_r[2]])
+p2_thrust_state = SampledSet(0.01, 0.99, 2)
 if np.cross(initial_los_yz, initial_v)[0] > 0:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
 else:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
-p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
+p2_accel_zenith_sampled_set = SampledSet(0, 90*np.pi/180, 5)
 
-p2_time_sampled_set = SampledSet(1.5, 10, 6)
-p2_time_to_p3_sampled_set = SampledSet(1.5, 10, 6)
-
+p2_time_sampled_set = SampledSet(1.5, 50, 6)
+p2_time_to_p3_sampled_set = SampledSet(1.5, 50, 6)
 
 
 
@@ -923,7 +913,7 @@ plotting_functions.plot_2d_data([t_combined, t_combined, t_combined], [v_x_combi
 
 plotting_functions.plot_2d_data([t_combined, t_combined, t_combined], [u_x_combined, u_y_combined, u_z_combined], ['ux', 'uy', 'uz'], 'Commanded Accel vs Time', 'Time (s)', 'Acceleration (m/s^2)')
 
-plotting_functions.plot_2d_data([t_combined, t_combined, t_combined], [thrust_combined * 1/1000.0, [lander.min_thrust * 1/1000.0]*len(t_combined), [lander.max_thrust * 1/1000.0]*len(t_combined)], ['Thrust', 'Thrust lower bound', 'Thrust upper bound'], 'Thrust vs time', 'Time (s)', 'Thrust (kN)', line_dict=[dict(), dict(color='red', dash='dash'), dict(color='red', dash='dash')])
+plotting_functions.plot_2d_data([t_combined, t_combined, t_combined], [thrust_combined * 1.0/lander.max_thrust, [lander.min_thrust * 1.0/lander.max_thrust]*len(t_combined), [1.0]*len(t_combined)], ['Throttle', 'Throttle lower bound', 'Throttle upper bound'], 'Throttle vs time', 'Time (s)', 'Throttle', line_dict=[dict(), dict(color='red', dash='dash'), dict(color='red', dash='dash')])
 
 plotting_functions.plot_2d_data([t_combined], [mass_combined], [''], 'Mass vs time', 'Time (s)', 'Mass (kg)')
 
