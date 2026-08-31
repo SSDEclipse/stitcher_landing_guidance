@@ -144,7 +144,7 @@ def plot_3d_data_with_rocket(
 
     # Trace 3 (Optional): Static Keepout Polygon
     if polygon_coords is not None:
-        poly_x = -polygon_coords[:, 2]
+        poly_x = polygon_coords[:, 2]
         poly_y = polygon_coords[:, 1]
         poly_z = polygon_coords[:, 0]
 
@@ -162,7 +162,6 @@ def plot_3d_data_with_rocket(
         )
 
     # 3. Precompute Animation Frames
-# 3. Precompute Animation Frames
     frames = []
     slider_steps = []
 

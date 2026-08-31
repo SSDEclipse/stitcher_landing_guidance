@@ -39,25 +39,25 @@ glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
 
 # lander = Vehicle(150000, 140000, 6000000, 2000000, 320)
 
-T = 7.5  # Time horizon
-N = 200    # Number of discretization points
-dt = T / (N - 1)  # Time step
+# T = 8.0  # Time horizon
+# N = 100    # Number of discretization points
+# dt = T / (N - 1)  # Time step
 
-r0 = np.array([[500.0], [100.0], [200.0]])
-v0 = np.array([[-80.0], [-40.0], [-20.0]])
-rf = np.array([[0.0], [0.0], [0.0]])
-vf = np.array([[0.0], [0.0], [0.0]])
+# r0 = np.array([[500.0], [100.0], [200.0]])
+# v0 = np.array([[-80.0], [-40.0], [-20.0]])
+# rf = np.array([[0.0], [0.0], [0.0]])
+# vf = np.array([[0.0], [0.0], [0.0]])
 
-m_wet = 150000.0  # mass, kg
-m_dry = 120000.0
-g = np.array([[9.80665], [0.0], [0.0]])
-T_max_thrust = 6000000
-T_max = 6000000  # max thrust force, N
-T_min = 2000000  # min thrust force, N
-Isp = 320.0
-alpha = 1.0 / (9.80665 * Isp)
-thrust_max_angle = 90.0 * np.pi / 180.0     # max vehicle tilt, rad
-glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
+# m_wet = 150000.0  # mass, kg
+# m_dry = 120000.0
+# g = np.array([[9.80665], [0.0], [0.0]])
+# T_max_thrust = 6000000
+# T_max = 6000000  # max thrust force, N
+# T_min = 2000000  # min thrust force, N
+# Isp = 320.0
+# alpha = 1.0 / (9.80665 * Isp)
+# thrust_max_angle = 90.0 * np.pi / 180.0     # max vehicle tilt, rad
+# glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
 
 
 

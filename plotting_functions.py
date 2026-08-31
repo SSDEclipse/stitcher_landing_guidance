@@ -153,64 +153,7 @@ def animate_orbit():
     animate_orbit_with_slider(t_vec, pos_vec)
 
 
-
-def plot_3d_data(data_t, data_x, data_y, data_z):
-
-    fig = go.Figure()
-
-    # Add the 3D path trace
-    fig.add_trace(go.Scatter3d(
-        x=data_x,
-        y=data_y,
-        z=data_z,
-        mode='lines+markers',             # Draws the continuous line AND color-mapped points
-        
-        # Line styling (the physical wireframe)
-        line=dict(
-            color='rgba(100, 100, 100, 0.4)', # Semi-transparent grey line connecting everything
-            width=4
-        ),
-        
-        # Marker styling (handles the time-based color gradient)
-        marker=dict(
-            size=4,
-            color=data_t,          # Maps colors directly to your time array
-            colorscale='Viridis',         # Clean time-progression color scheme
-            colorbar=dict(title="Time"),  # Adds the legend bar on the right
-            opacity=0.9
-        ),
-        
-        # Hover text configurations
-        customdata=data_t,
-        hovertemplate=(
-            "<b>Time:</b> %{customdata:.1f}<br>" +
-            "<b>X:</b> %{x:.2f}<br>" +
-            "<b>Y:</b> %{y:.2f}<br>" +
-            "<b>Z:</b> %{z:.2f}<extra></extra>" # <extra></extra> hides the default secondary box
-        )
-    ))
-
-    # --- 3. Scene Layout Adjustments ---
-    fig.update_layout(
-        title="3D Time-Series Trajectory Plot",
-        scene=dict(
-            xaxis_title='X Position',
-            yaxis_title='Y Position',
-            zaxis_title='Z Position',
-            bgcolor="rgb(250, 250, 250)"
-        ),
-    )
-    fig.update_layout(
-        scene=dict(
-            aspectmode='data'
-        )
-    )
-
-    # Display the final plot
-    fig.show()
-
-
-def plot_2d_data(x_data, y_data, labels, title, xaxis_label, yaxis_label):
+def plot_2d_data(x_data, y_data, labels, title, xaxis_label, yaxis_label, line_dict=None):
     """Plots multiple time series where the x-axis is numeric elapsed time.
 
         Parameters:
@@ -231,7 +174,9 @@ def plot_2d_data(x_data, y_data, labels, title, xaxis_label, yaxis_label):
     fig = go.Figure()
 
     # Loop through and add each time series trace
-    for x, y, label in zip(x_data, y_data, labels):
+    if line_dict is None:
+        line_dict = [None]*len(x_data)
+    for x, y, label, line_info in zip(x_data, y_data, labels, line_dict):
         fig.add_trace(
             go.Scatter(
                 x=x,
@@ -239,6 +184,7 @@ def plot_2d_data(x_data, y_data, labels, title, xaxis_label, yaxis_label):
                 mode="lines",
                 name=label,
                 connectgaps=True,
+                line=line_info
             )
         )
 
@@ -408,7 +354,7 @@ def plot_3d_data_with_rocket(
 
     if polygon_coords is not None:
             # Extract X, Y, Z from the (N, 3) numpy array
-            poly_x = -polygon_coords[:, 2]
+            poly_x = polygon_coords[:, 2]
             poly_y = polygon_coords[:, 1]
             poly_z = polygon_coords[:, 0]
 
