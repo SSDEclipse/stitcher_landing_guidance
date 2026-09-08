@@ -220,6 +220,7 @@ def plot_3d_data_with_rocket(
 ):
     fig = go.Figure()
 
+
     # 1. Main 3D Trajectory Trace
     fig.add_trace(
         go.Scatter3d(
@@ -326,6 +327,21 @@ def plot_3d_data_with_rocket(
         )
     )
 
+    all_x = np.concatenate([data_x, cyl_x])
+    all_y = np.concatenate([data_y, cyl_y])
+    all_z = np.concatenate([data_z, cyl_z])
+
+    x_min, x_max = np.min(all_x), np.max(all_x)
+    y_min, y_max = np.min(all_y), np.max(all_y)
+    z_min, z_max = np.min(all_z), np.max(all_z)
+
+    # Find the largest span to ensure 1:1:1 scale
+    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
+
+    x_mid = (x_max + x_min) / 2.0
+    y_mid = (y_max + y_min) / 2.0
+    z_mid = (z_max + z_min) / 2.0
+
     # 4. Draw Opposing Thrust Cones (Tip attached at trajectory, pointing in -Acc direction)
     fig.add_trace(
         go.Cone(
@@ -336,7 +352,7 @@ def plot_3d_data_with_rocket(
             v=acc_y,
             w=acc_z,
             sizemode="raw",
-            sizeref=thrust_scale,
+            sizeref=thrust_scale * max_range / 150.0,
             anchor="tip",  # Connects the tip of the cone to the trajectory point
             colorscale=[[0, "red"], [1, "red"]],
             showscale=False,
@@ -370,22 +386,6 @@ def plot_3d_data_with_rocket(
                     showlegend=True
                 )
             )
-
-
-    all_x = np.concatenate([data_x, cyl_x])
-    all_y = np.concatenate([data_y, cyl_y])
-    all_z = np.concatenate([data_z, cyl_z])
-
-    x_min, x_max = np.min(all_x), np.max(all_x)
-    y_min, y_max = np.min(all_y), np.max(all_y)
-    z_min, z_max = np.min(all_z), np.max(all_z)
-
-    # Find the largest span to ensure 1:1:1 scale
-    max_range = max(x_max - x_min, y_max - y_min, z_max - z_min) / 2.0
-
-    x_mid = (x_max + x_min) / 2.0
-    y_mid = (y_max + y_min) / 2.0
-    z_mid = (z_max + z_min) / 2.0
 
     # 5. Scene Layout Adjustments
     fig.update_layout(

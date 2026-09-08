@@ -9,23 +9,22 @@ from scipy.spatial.transform import Rotation as R
 # Define the time horizon and discretization
 # =============================================================================
 T = 65.0  # Time horizon
+T = 80.0
 N = 100    # Number of discretization points
 dt = T / (N - 1)  # Time step
 
-r0 = np.array([[2400.0], [450.0], [-330.0]])
-v0 = np.array([[-10.0], [-40.0], [10.0]])
-# r0 = np.array([[2400.0], [3400], [0.0]])
-# v0 = np.array([[-40.0], [45.0], [0.0]])
+r0 = np.array([[1500.0], [0.0], [2000.0]])
+v0 = np.array([[-75.0], [0.0], [100.0]])
 rf = np.array([[0.0], [0.0], [0.0]])
 vf = np.array([[0.0], [0.0], [0.0]])
 
-m_wet = 2000.0  # mass, kg
-m_dry = 1700.0
+m_wet = 1905.0  # mass, kg
+m_dry = 1505.0
 g = np.array([[3.7114], [0.0], [0.0]])
-T_max_thrust = 24000.0
+T_max_thrust = 3100*6*np.cos(27*np.pi/180)
 T_max = 0.8 * T_max_thrust  # max thrust force, N
-T_min = 0.2 * T_max_thrust  # min thrust force, N
-Isp = 1.0 / (9.80665 * 5 * 10**-4)
+T_min = 0.3 * T_max_thrust  # min thrust force, N
+Isp = 225 # 1.0 / (9.80665 * 5 * 10**-4)
 alpha = 1.0 / (9.80665 * Isp)
 thrust_max_angle = 90.0 * np.pi / 180.0     # max vehicle tilt, rad
 glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle

@@ -33,15 +33,19 @@ class StartNode:
     def create_and_append_edge(self, target_node):
         t_f = target_node.time
 
-        c_0_array = target_node.acceleration_p1_start.copy()
-        c_0_array[0] -= planetary_body_config.body_surface_gravity
-        c_1_array = 6.0 / t_f**3 * (target_node.position - self.position - self.velocity * t_f - 0.5*t_f**2 * c_0_array)
-        v_f = self.velocity + c_0_array * t_f + 0.5*t_f**2 * c_1_array
-        c_0_array[0] += planetary_body_config.body_surface_gravity
-        target_node.update_node_velocity(v_f)
-        target_node.update_node_acceleration(c_0_array + c_1_array * t_f)
+        c_0_array = target_node.c_0_array.copy()
+        # c_0_array[0] -= planetary_body_config.body_surface_gravity
+        c_1_array = target_node.c_1_array.copy()
+        c_2_array = target_node.c_2_array.copy()
+        c_3_array = target_node.c_3_array.copy()
+        # v_f = self.velocity + c_0_array * t_f + 1.0/2.0*t_f**2 * c_1_array + 1.0/3.0*t_f**3 * c_2_array + 1.0/4.0*t_f**4 * c_3_array
+        # r_f = self.position + self.velocity * t_f + 1.0/2.0 * t_f**2 * c_0_array + 1.0/6.0 * t_f**3 * c_1_array + 1.0/12.0 * t_f**4 * c_2_array + 1.0/20.0 * t_f**5 * c_3_array
 
-        new_edge = Edge(self, target_node, c_0_array, c_1_array, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), t_f)
+        # c_0_array[0] += planetary_body_config.body_surface_gravity
+        # target_node.update_node_velocity(v_f)
+        # target_node.update_node_acceleration(c_0_array + c_1_array * t_f + c_2_array * t_f**2 + c_3_array * t_f**3)
+
+        new_edge = Edge(self, target_node, c_0_array, c_1_array, c_2_array, c_3_array, t_f)
         self.target_edges.append(new_edge)
         target_node.parent_edges.append(new_edge)
         return new_edge
@@ -50,11 +54,12 @@ class StartNode:
         self.velocity = input_velocity
 
 class P1Node:
-    def __init__(self, position, velocity, acceleration, acceleration_p1_start, c_2_array, c_3_array, time):
+    def __init__(self, position, velocity, acceleration, c_0_array, c_1_array, c_2_array, c_3_array, time):
         self.position = position
         self.velocity = velocity
         self.acceleration = acceleration
-        self.acceleration_p1_start = acceleration_p1_start
+        self.c_0_array = c_0_array
+        self.c_1_array = c_1_array
         self.c_2_array = c_2_array
         self.c_3_array = c_3_array
         self.time = time
@@ -65,9 +70,10 @@ class P1Node:
     def create_and_append_edge(self, target_node):
         t_f = target_node.time
 
-        time_matrix_inverse = np.linalg.inv(np.array([[t_f, t_f**2, t_f**3], 
-                                                      [1.0/2.0*t_f**2, 1.0/3.0*t_f**3, 1.0/4.0*t_f**4], 
-                                                      [1.0/6.0*t_f**3, 1.0/12.0*t_f**4, 1.0/20.0*t_f**5]]))
+        # time_matrix_inverse = np.linalg.inv(np.array([[t_f, t_f**2, t_f**3], 
+        #                                               [1.0/2.0*t_f**2, 1.0/3.0*t_f**3, 1.0/4.0*t_f**4], 
+        #                                               [1.0/6.0*t_f**3, 1.0/12.0*t_f**4, 1.0/20.0*t_f**5]]))
+        time_matrix_inverse = time_matrix_inverses_dict[t_f]
         # need to remove gravity accel from self.accel and target.accels first # coefficient_array = time_matrix_inverse @ np.array([target_node.acceleration - self.acceleration, target_node.velocity - self.velocity - self.acceleration * t_f, target_node.position - self.position - self.velocity * t_f - 1.0/2.0*self.acceleration*t_f**2]).T
         target_accel_propagation = target_node.acceleration.copy()
         target_accel_propagation[0] -= planetary_body_config.body_surface_gravity
@@ -95,11 +101,14 @@ class P1Node:
         self.acceleration = input_acceleration
 
 class P2Node:
-    def __init__(self, position, velocity, acceleration, acceleration_p3_end, time, time_to_p3):
+    def __init__(self, position, velocity, acceleration, c_0_array, c_1_array, c_2_array, c_3_array, time, time_to_p3):
         self.position = position
         self.velocity = velocity
         self.acceleration = acceleration
-        self.acceleration_p3_end = acceleration_p3_end
+        self.c_0_array = c_0_array
+        self.c_1_array = c_1_array
+        self.c_2_array = c_2_array
+        self.c_3_array = c_3_array
         self.time = time
         self.time_to_p3 = time_to_p3
         self.target_edges = []
@@ -107,19 +116,11 @@ class P2Node:
     
     def create_and_append_backward_edge(self, target_node):
         t_f = self.time_to_p3
-
-        global_end_acceleration = self.acceleration_p3_end.copy()
-        global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
-        c_0_array = -2.0 * global_end_acceleration - 6.0 / t_f**2 * (target_node.position - self.position - target_node.velocity*t_f)
-        c_1_array = 3.0 / t_f * global_end_acceleration + 6 / t_f**3 * (target_node.position - self.position - target_node.velocity*t_f)
-        v_0 = target_node.velocity - c_0_array*t_f - 0.5*t_f**2 * c_1_array
-        c_0_array[0] += planetary_body_config.body_surface_gravity
-        self.update_node_velocity(v_0)
-        self.update_node_acceleration(c_0_array)
-
-        new_edge = Edge(self, target_node, c_0_array, c_1_array, np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), t_f)
+        self.update_node_acceleration(self.c_0_array)
+        new_edge = Edge(self, target_node, self.c_0_array, self.c_1_array, self.c_2_array, self.c_3_array, t_f)
         self.target_edges.append(new_edge)
         target_node.parent_edges.append(new_edge)
+
         return new_edge
     
     def update_node_velocity(self, input_velocity):
@@ -333,6 +334,17 @@ def get_nearest_array_neighbors(input_array, input_value):
     else:
         return input_array[idx - 1], input_array[idx]
 
+def get_new_sampled_set_bounds(input_array, input_value):
+    interval_width = input_array[-1] - input_array[-2]
+    lower_bound = input_value - interval_width / 2.0
+    upper_bound = input_value + interval_width / 2.0
+
+    if lower_bound < input_array[0]:
+        lower_bound = input_array[0]
+    if upper_bound > input_array[-1]:
+        upper_bound = input_array[-1]
+
+    return lower_bound, upper_bound
 
 def quaternion_multiply(Q0,Q1):
     """
@@ -422,43 +434,48 @@ def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_s
             acc = acc_and_thrust_level[0]
             thrust_level = acc_and_thrust_level[1]
             c_0_array = start_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.wet_mass
-            phase_1_start_acceleration = c_0_array.copy()
-            c_0_array[0] -= planetary_body_config.body_surface_gravity
-            global_end_acceleration = acc.copy()
+            local_start_accel = c_0_array.copy()
+            local_end_accel = acc.copy()
 
-            rotation_vector = np.cross(phase_1_start_acceleration, global_end_acceleration) / np.linalg.norm(np.cross(phase_1_start_acceleration, global_end_acceleration))
-            if np.dot(phase_1_start_acceleration, global_end_acceleration) / (np.linalg.norm(phase_1_start_acceleration) * np.linalg.norm(global_end_acceleration)) < -1.0:
-                rotation_angle_total = np.pi
-            elif np.dot(phase_1_start_acceleration, global_end_acceleration) / (np.linalg.norm(phase_1_start_acceleration) * np.linalg.norm(global_end_acceleration)) > 1.0:
-                rotation_angle_total = 0
+            if np.linalg.norm(np.cross(local_start_accel, local_end_accel)) > 1e-6:
+                rotation_vector = np.cross(local_start_accel, local_end_accel) / np.linalg.norm(np.cross(local_start_accel, local_end_accel))
+                if np.dot(local_start_accel, local_end_accel) / (np.linalg.norm(local_start_accel) * np.linalg.norm(local_end_accel)) < -1.0:
+                    rotation_angle_total = np.pi
+                elif np.dot(local_start_accel, local_end_accel) / (np.linalg.norm(local_start_accel) * np.linalg.norm(local_end_accel)) > 1.0:
+                    rotation_angle_total = 0
+                else:
+                    rotation_angle_total = np.arccos(np.dot(local_start_accel, local_end_accel) / (np.linalg.norm(local_start_accel) * np.linalg.norm(local_end_accel)))
             else:
-                rotation_angle_total = np.arccos(np.dot(phase_1_start_acceleration, global_end_acceleration) / (np.linalg.norm(phase_1_start_acceleration) * np.linalg.norm(global_end_acceleration)))
+                rotation_vector = np.array([1.0, 0.0, 0.0])
+                rotation_angle_total = 0.0
+
             rotation_angle_1 = 1.0/3.0 * rotation_angle_total
             rotation_angle_2 = 2.0/3.0 * rotation_angle_total
             rotation_quat_1 = np.array([np.cos(rotation_angle_1 / 2.0), rotation_vector[0] * np.sin(rotation_angle_1 / 2.0), rotation_vector[1] * np.sin(rotation_angle_1 / 2.0), rotation_vector[2] * np.sin(rotation_angle_1 / 2.0)])
             rotation_quat_2 = np.array([np.cos(rotation_angle_2 / 2.0), rotation_vector[0] * np.sin(rotation_angle_2 / 2.0), rotation_vector[1] * np.sin(rotation_angle_2 / 2.0), rotation_vector[2] * np.sin(rotation_angle_2 / 2.0)])
-            acc_mag_1 = 2.0/3.0 * np.linalg.norm(phase_1_start_acceleration) + 1.0/3.0 * np.linalg.norm(global_end_acceleration)
-            acc_mag_2 = 1.0/3.0 * np.linalg.norm(phase_1_start_acceleration) + 2.0/3.0 * np.linalg.norm(global_end_acceleration)
-            acc_vec_1 = convertVectorReferenceFrame(rotation_quat_1, acc_mag_1 * phase_1_start_acceleration / np.linalg.norm(phase_1_start_acceleration))
-            acc_vec_2 = convertVectorReferenceFrame(rotation_quat_2, acc_mag_2 * phase_1_start_acceleration / np.linalg.norm(phase_1_start_acceleration))
+            acc_mag_1 = 2.0/3.0 * np.linalg.norm(local_start_accel) + 1.0/3.0 * np.linalg.norm(local_end_accel)
+            acc_mag_2 = 1.0/3.0 * np.linalg.norm(local_start_accel) + 2.0/3.0 * np.linalg.norm(local_end_accel)
+            acc_vec_1 = convertVectorReferenceFrame(rotation_quat_1, acc_mag_1 * local_start_accel / np.linalg.norm(local_start_accel))
+            acc_vec_2 = convertVectorReferenceFrame(rotation_quat_2, acc_mag_2 * local_start_accel / np.linalg.norm(local_start_accel))
             acc_vec_1[0] -= planetary_body_config.body_surface_gravity
             acc_vec_2[0] -= planetary_body_config.body_surface_gravity
-
-            global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
-
+            global_end_accel = local_end_accel.copy()
+            global_end_accel[0] -= planetary_body_config.body_surface_gravity
+            c_0_array[0] -= planetary_body_config.body_surface_gravity
             time_matrix_inverse = np.linalg.inv(np.array([[(time / 1.0), (time / 1.0)**2, (time / 1.0)**3], 
                                                         [(2 * time / 3.0), (2 * time / 3.0)**2, (2 * time / 3.0)**3], 
                                                         [(time / 3.0), (time / 3.0)**2, (time / 3.0)**3]]))
 
-            coefficient_array = time_matrix_inverse @ np.array([global_end_acceleration - c_0_array, global_end_acceleration - acc_vec_2, global_end_acceleration - acc_vec_1])
+            coefficient_array = time_matrix_inverse @ np.array([global_end_accel - c_0_array, acc_vec_2 - c_0_array, acc_vec_1 - c_0_array])
             c_1_array = coefficient_array[0]
             c_2_array = coefficient_array[1]
             c_3_array = coefficient_array[2]
 
-            c_1_array = (global_end_acceleration - c_0_array) / time
             pos = start_node.position + start_node.velocity * time + 1.0/2.0 * time**2 * c_0_array + 1.0/6.0 * time**3 * c_1_array + 1.0/12.0 * time**4 * c_2_array + 1.0/20.0 * time**5 * c_3_array
-            pos = start_node.position + start_node.velocity * time + 1.0/2.0 * time**2 * c_0_array + 1.0/6.0 * time**3 * c_1_array
-            phase_1_nodes.append(P1Node(pos, None, None, phase_1_start_acceleration, c_2_array, c_3_array, time))
+            vel = start_node.velocity + c_0_array * time + 1.0/2.0*time**2 * c_1_array + 1.0/3.0*time**3 * c_2_array + 1.0/4.0*time**4 * c_3_array
+            c_0_array[0] += planetary_body_config.body_surface_gravity
+            local_end_accel = c_0_array + c_1_array*time + c_2_array*time**2 + c_3_array*time**3
+            phase_1_nodes.append(P1Node(pos, vel, local_end_accel, c_0_array, c_1_array, c_2_array, c_3_array, time))
     return phase_1_nodes
 
 def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, end_node, thrust_level_sampled_state, acc_azimuth_sampled_set, acc_zenith_sampled_set):
@@ -484,18 +501,52 @@ def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, en
             for acc_and_thrust_level in sampled_accelerations_array:
                 acc = acc_and_thrust_level[0]
                 thrust_level = acc_and_thrust_level[1]
-                global_start_acceleration = acc.copy()
-                global_start_acceleration[0] -= planetary_body_config.body_surface_gravity
-                c_0_array = global_start_acceleration
+                c_0_array = acc.copy()
                 if thrust_level > 0.5:
-                    global_end_acceleration = end_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.wet_mass
+                    local_end_accel = end_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.wet_mass
                 else:
-                    global_end_acceleration = end_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.dry_mass
-                p3_end_acceleration = global_end_acceleration.copy()
-                global_end_acceleration[0] -= planetary_body_config.body_surface_gravity
-                c_1_array = (global_end_acceleration - c_0_array) / time_to_p3
-                pos = end_node.position - end_node.velocity * time_to_p3 + 1.0/2.0 * time_to_p3**2 * c_0_array + 1.0/3.0 * time_to_p3**3 * c_1_array
-                phase_2_nodes.append(P2Node(pos, None, None, p3_end_acceleration, time, time_to_p3))
+                    local_end_accel = end_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.dry_mass
+
+
+                local_start_accel = c_0_array.copy()
+
+                if np.linalg.norm(np.cross(local_start_accel, local_end_accel)) > 1e-6:
+                    rotation_vector = np.cross(local_start_accel, local_end_accel) / np.linalg.norm(np.cross(local_start_accel, local_end_accel))
+                    if np.dot(local_start_accel, local_end_accel) / (np.linalg.norm(local_start_accel) * np.linalg.norm(local_end_accel)) < -1.0:
+                        rotation_angle_total = np.pi
+                    elif np.dot(local_start_accel, local_end_accel) / (np.linalg.norm(local_start_accel) * np.linalg.norm(local_end_accel)) > 1.0:
+                        rotation_angle_total = 0
+                    else:
+                        rotation_angle_total = np.arccos(np.dot(local_start_accel, local_end_accel) / (np.linalg.norm(local_start_accel) * np.linalg.norm(local_end_accel)))
+                else:
+                    rotation_vector = np.array([1.0, 0.0, 0.0])
+                    rotation_angle_total = 0.0
+                rotation_angle_1 = 1.0/3.0 * rotation_angle_total
+                rotation_angle_2 = 2.0/3.0 * rotation_angle_total
+                rotation_quat_1 = np.array([np.cos(rotation_angle_1 / 2.0), rotation_vector[0] * np.sin(rotation_angle_1 / 2.0), rotation_vector[1] * np.sin(rotation_angle_1 / 2.0), rotation_vector[2] * np.sin(rotation_angle_1 / 2.0)])
+                rotation_quat_2 = np.array([np.cos(rotation_angle_2 / 2.0), rotation_vector[0] * np.sin(rotation_angle_2 / 2.0), rotation_vector[1] * np.sin(rotation_angle_2 / 2.0), rotation_vector[2] * np.sin(rotation_angle_2 / 2.0)])
+                acc_mag_1 = 2.0/3.0 * np.linalg.norm(local_start_accel) + 1.0/3.0 * np.linalg.norm(local_end_accel)
+                acc_mag_2 = 1.0/3.0 * np.linalg.norm(local_start_accel) + 2.0/3.0 * np.linalg.norm(local_end_accel)
+                acc_vec_1 = convertVectorReferenceFrame(rotation_quat_1, acc_mag_1 * local_start_accel / np.linalg.norm(local_start_accel))
+                acc_vec_2 = convertVectorReferenceFrame(rotation_quat_2, acc_mag_2 * local_start_accel / np.linalg.norm(local_start_accel))
+                acc_vec_1[0] -= planetary_body_config.body_surface_gravity
+                acc_vec_2[0] -= planetary_body_config.body_surface_gravity
+                global_end_accel = local_end_accel.copy()
+                global_end_accel[0] -= planetary_body_config.body_surface_gravity
+                c_0_array[0] -= planetary_body_config.body_surface_gravity
+                time_matrix_inverse = np.linalg.inv(np.array([[(time_to_p3 / 1.0), (time_to_p3 / 1.0)**2, (time_to_p3 / 1.0)**3], 
+                                                            [(2 * time_to_p3 / 3.0), (2 * time_to_p3 / 3.0)**2, (2 * time_to_p3 / 3.0)**3], 
+                                                            [(time_to_p3 / 3.0), (time_to_p3 / 3.0)**2, (time_to_p3 / 3.0)**3]]))
+
+                coefficient_array = time_matrix_inverse @ np.array([global_end_accel - c_0_array, acc_vec_2 - c_0_array, acc_vec_1 - c_0_array])
+                c_1_array = coefficient_array[0]
+                c_2_array = coefficient_array[1]
+                c_3_array = coefficient_array[2]
+
+                vel = end_node.velocity - c_0_array*time_to_p3 - 1.0/2.0*c_1_array*time_to_p3**2 - 1.0/3.0*c_2_array*time_to_p3**3 - 1.0/4.0*c_3_array*time_to_p3**4
+                pos = end_node.position - vel * time_to_p3 - 1.0/2.0 * time_to_p3**2 * c_0_array - 1.0/6.0 * time_to_p3**3 * c_1_array - 1.0/12.0 * time_to_p3**4 * c_2_array - 1.0/20.0 * time_to_p3**5 * c_3_array
+                c_0_array[0] += planetary_body_config.body_surface_gravity
+                phase_2_nodes.append(P2Node(pos, vel, c_0_array, c_0_array, c_1_array, c_2_array, c_3_array, time, time_to_p3))
 
     return phase_2_nodes
 
@@ -731,8 +782,6 @@ def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_
                         optimal_edge_1 = copy.copy(optimal_node_1.parent_edges[0])
     T_p3_edge_cost_pruning = time.time() - last_solver_checkpoint_time
 
-
-
     p1_acc_azimuth = np.arctan2(optimal_node_1.acceleration[1], optimal_node_1.acceleration[2])
     if not (p1_sampled_set_dict['acc_azimuth'].lower_bound <= p1_acc_azimuth and p1_acc_azimuth <= p1_sampled_set_dict['acc_azimuth'].upper_bound):
         if p1_acc_azimuth > p1_sampled_set_dict['acc_azimuth'].upper_bound:
@@ -740,10 +789,10 @@ def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_
         else:
             p1_acc_azimuth += 2*np.pi
     p1_acc_zenith = np.arccos(np.dot(optimal_node_1.acceleration, np.array([1.0, 0.0, 0.0])) / np.linalg.norm(optimal_node_1.acceleration))
-    new_p1_time_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['time'].lower_bound, p1_sampled_set_dict['time'].upper_bound, p1_sampled_set_dict['time'].num_points), optimal_edge_1.t_f), p1_sampled_set_dict['time'].num_points)
+    new_p1_time_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p1_sampled_set_dict['time'].lower_bound, p1_sampled_set_dict['time'].upper_bound, p1_sampled_set_dict['time'].num_points), optimal_edge_1.t_f), p1_sampled_set_dict['time'].num_points)
     new_p1_thrust_state_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['thrust_state'].lower_bound, p1_sampled_set_dict['thrust_state'].upper_bound, p1_sampled_set_dict['thrust_state'].num_points), optimal_node_1.position[0]), p1_sampled_set_dict['thrust_state'].num_points)
     new_p1_acc_azimuth_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['acc_azimuth'].lower_bound, p1_sampled_set_dict['acc_azimuth'].upper_bound, p1_sampled_set_dict['acc_azimuth'].num_points), p1_acc_azimuth), p1_sampled_set_dict['acc_azimuth'].num_points)
-    new_p1_acc_zenith_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['acc_zenith'].lower_bound, p1_sampled_set_dict['acc_zenith'].upper_bound, p1_sampled_set_dict['acc_zenith'].num_points), p1_acc_zenith), p1_sampled_set_dict['acc_zenith'].num_points)
+    new_p1_acc_zenith_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p1_sampled_set_dict['acc_zenith'].lower_bound, p1_sampled_set_dict['acc_zenith'].upper_bound, p1_sampled_set_dict['acc_zenith'].num_points), p1_acc_zenith), p1_sampled_set_dict['acc_zenith'].num_points)
     # new_p1_acc_azimuth_sampled_set = SampledSet(p1_acc_azimuth, p1_acc_azimuth, 2)
 
 
@@ -754,13 +803,17 @@ def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_
         else:
             p2_acc_azimuth += 2*np.pi
     p2_acc_zenith = np.arccos(np.dot(optimal_node_2.acceleration, np.array([1.0, 0.0, 0.0])) / np.linalg.norm(optimal_node_2.acceleration))
-    new_p2_time_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['time'].lower_bound, p2_sampled_set_dict['time'].upper_bound, p2_sampled_set_dict['time'].num_points), optimal_edge_2.t_f), p2_sampled_set_dict['time'].num_points)
-    new_p2_time_to_p3_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['time_to_p3'].lower_bound, p2_sampled_set_dict['time_to_p3'].upper_bound, p2_sampled_set_dict['time_to_p3'].num_points), optimal_edge_3.t_f), p2_sampled_set_dict['time_to_p3'].num_points)
+    new_p2_time_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p2_sampled_set_dict['time'].lower_bound, p2_sampled_set_dict['time'].upper_bound, p2_sampled_set_dict['time'].num_points), optimal_edge_2.t_f), p2_sampled_set_dict['time'].num_points)
+    new_p2_time_to_p3_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p2_sampled_set_dict['time_to_p3'].lower_bound, p2_sampled_set_dict['time_to_p3'].upper_bound, p2_sampled_set_dict['time_to_p3'].num_points), optimal_edge_3.t_f), p2_sampled_set_dict['time_to_p3'].num_points)
     new_p2_thrust_state_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['thrust_state'].lower_bound, p2_sampled_set_dict['thrust_state'].upper_bound, p2_sampled_set_dict['thrust_state'].num_points), optimal_node_2.position[0]), p2_sampled_set_dict['thrust_state'].num_points)
     new_p2_acc_azimuth_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['acc_azimuth'].lower_bound, p2_sampled_set_dict['acc_azimuth'].upper_bound, p2_sampled_set_dict['acc_azimuth'].num_points), p2_acc_azimuth), p2_sampled_set_dict['acc_azimuth'].num_points)
-    new_p2_acc_zenith_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['acc_zenith'].lower_bound, p2_sampled_set_dict['acc_zenith'].upper_bound, p2_sampled_set_dict['acc_zenith'].num_points), p2_acc_zenith), p2_sampled_set_dict['acc_zenith'].num_points)
+    new_p2_acc_zenith_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p2_sampled_set_dict['acc_zenith'].lower_bound, p2_sampled_set_dict['acc_zenith'].upper_bound, p2_sampled_set_dict['acc_zenith'].num_points), p2_acc_zenith), p2_sampled_set_dict['acc_zenith'].num_points)
     # new_p2_acc_azimuth_sampled_set = SampledSet(p2_acc_azimuth, p2_acc_azimuth, 2)
 
+    for t_f in np.linspace(new_p2_time_sampled_set.lower_bound, new_p2_time_sampled_set.upper_bound, new_p2_time_sampled_set.num_points):
+        time_matrix_inverses_dict[t_f] = np.linalg.inv(np.array([[t_f, t_f**2, t_f**3], 
+                                                    [1.0/2.0*t_f**2, 1.0/3.0*t_f**3, 1.0/4.0*t_f**4], 
+                                                    [1.0/6.0*t_f**3, 1.0/12.0*t_f**4, 1.0/20.0*t_f**5]]))
 
     new_p1_sampled_set_dict = {
         'time': new_p1_time_sampled_set,
@@ -776,7 +829,6 @@ def generate_stitcher_trajectory_linear_cubic_accel(vehicle, initial_r, initial_
         'acc_azimuth': new_p2_acc_azimuth_sampled_set,
         'acc_zenith': new_p2_acc_zenith_sampled_set
     }
-
 
     solver_durations = {'T_p1_edge_generation': T_p1_edge_generation,
                         'T_p1_edge_cost_pruning': T_p1_edge_cost_pruning,
@@ -823,15 +875,23 @@ initial_v = np.array([-75.0, 0.0, 100.0])
 initial_a = np.array([1.0, 0.0, -1.0])
 final_a = np.array([1.0, 0.0, 0.0])
 lander = Vehicle(1905, 1505, 0.8*3100*6*np.cos(27*np.pi/180), 0.3*3100*6*np.cos(27*np.pi/180), 225)
+tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
 
 
+# Bellyflop case
+initial_r = np.array([500.0, 0.0, 100.0])
+initial_v = np.array([-80.0, 0.0, 0.0])
+initial_a = np.array([0.0, 0.0, -1.0])
+final_r = np.array([0.0, 0.0, 0.0])
+final_v = np.array([0.0, 0.0, 0.0])
+final_a = np.array([1.0, -0.0, 0.0])
+lander = Vehicle(150000, 135000, 6000000, 2000000, 320)
+tower_coords = np.array([[0, -20, 5], [0, 20, 5], [0, -20, 45], [0, 20, 45], [120, -20, 5], [120, 20, 5], [120, -20, 45], [120, 20, 45]])
 
 
 final_r = np.array([0.0, 0.0, 0.0])
 final_v = np.array([0.0, 0.0, 0.0])
 final_a = np.array([1.0, 0.0, 0.0])
-final_a = np.array([1.0, 0.0, 0.0])
-
 
 # initial_r = np.array([500.0, 100.0, 200.0])
 # initial_v = np.array([-80.0, -40.0, -20.0])
@@ -845,9 +905,9 @@ final_a = np.array([1.0, 0.0, 0.0])
 # initial_a = initial_a / np.linalg.norm(initial_a)
 # final_a = final_a / np.linalg.norm(final_a)
 
-tower_coords = np.array([[0.0, 0.0, 0.0]])
+# tower_coords = np.array([[0.0, 0.0, 0.0]])
 # tower_coords = np.array([[0, 0, 500], [0, 0, -500], [0, 500, 500], [0, 500, -500], [1000, 0, 500], [1000, 0, -500], [1000, 500, 500], [1000, 500, -500]])
-tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
+# tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
 constraints = Constraints(position_keepout_coords=tower_coords)
 
 tower_plotting_coords = tower_coords
@@ -859,25 +919,25 @@ tower_plotting_coords = tower_coords
 
 
 
-p1_time_sampled_set = SampledSet(1.5, 70, 6)
-p1_thrust_state = SampledSet(0.01, 0.99, 2)
+p1_time_sampled_set = SampledSet(1.5, 10, 6)
+p1_thrust_state = SampledSet(0.1, 0.99, 2)
 azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
 initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
 if np.cross(initial_los_yz, initial_v)[0] > 0:
     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
 else:
     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
-p1_accel_zenith_sampled_set = SampledSet(0, 90*np.pi/180, 5)
+p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
 
 p2_thrust_state = SampledSet(0.01, 0.99, 2)
 if np.cross(initial_los_yz, initial_v)[0] > 0:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
 else:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
-p2_accel_zenith_sampled_set = SampledSet(0, 90*np.pi/180, 5)
+p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
 
-p2_time_sampled_set = SampledSet(1.5, 70, 6)
-p2_time_to_p3_sampled_set = SampledSet(1.5, 70, 6)
+p2_time_sampled_set = SampledSet(1.5, 10, 6)
+p2_time_to_p3_sampled_set = SampledSet(1.5, 10, 6)
 
 
 
@@ -912,9 +972,15 @@ p2_sampled_set_dict = {
     'acc_zenith': p2_accel_zenith_sampled_set
 }
 
+time_matrix_inverses_dict = {}
+for t_f in np.linspace(p2_time_sampled_set.lower_bound, p2_time_sampled_set.upper_bound, p2_time_sampled_set.num_points):
+        time_matrix_inverses_dict[t_f] = np.linalg.inv(np.array([[t_f, t_f**2, t_f**3], 
+                                                      [1.0/2.0*t_f**2, 1.0/3.0*t_f**3, 1.0/4.0*t_f**4], 
+                                                      [1.0/6.0*t_f**3, 1.0/12.0*t_f**4, 1.0/20.0*t_f**5]]))
+
 guidance_output = generate_stitcher_trajectory_linear_cubic_accel(lander, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, p1_sampled_set_dict, p2_sampled_set_dict, process_plot=True)
 
-# guidance_output = generate_stitcher_trajectory_linear_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
+guidance_output = generate_stitcher_trajectory_linear_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
 
 # guidance_output = generate_stitcher_trajectory_linear_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
 
