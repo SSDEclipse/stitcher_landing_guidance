@@ -406,3 +406,144 @@ def plot_3d_data_with_rocket(
     )
 
     fig.show()
+
+
+def process_plot(
+    p1_all_p_t,
+    p2_all_p_t,
+    p3_all_p_t,
+    p1_valid_p_t,
+    p2_valid_p_t,
+    p3_valid_p_t,
+    opt_p_t
+    # acc_t,
+    # acc_x,
+    # acc_y,
+    # acc_z,
+    # rocket_length=40.0,  # Constant length of the rocket cylinder
+    # rocket_radius=4.5,  # Constant radius of the rocket body
+    # thrust_scale=3,  # Scaling factor for thrust vector size
+    # polygon_coords=None
+):
+    fig = go.Figure()
+
+    p1_all_t = p1_all_p_t['t']
+    p1_all_pos = p1_all_p_t['pos']
+    for i in range(len(p1_all_t)):
+        data_x = p1_all_pos[i][:,2]
+        data_y = p1_all_pos[i][:,1]
+        data_z = p1_all_pos[i][:,0]
+        data_t = p1_all_t[i]
+        fig.add_trace(
+            go.Scatter3d(
+                x=data_x,
+                y=data_y,
+                z=data_z,
+                mode="lines",
+                opacity=1.0,
+                line=dict(color="rgb(255, 0, 0)", width=1),
+                customdata=data_t,
+                hovertemplate=(
+                    "<b>Time:</b> %{customdata:.1f}<br>"
+                    + "<b>X:</b> %{x:.2f}<br>"
+                    + "<b>Y:</b> %{y:.2f}<br>"
+                    + "<b>Z:</b> %{z:.2f}<extra></extra>"
+                ),
+                name="P1 Trajectories",
+                legendgroup='p1',
+                showlegend=i==0
+            )
+        )
+
+    p2_all_t = p2_all_p_t['t']
+    p2_all_pos = p2_all_p_t['pos']
+    for i in range(len(p2_all_t)):
+        data_x = p2_all_pos[i][:,2]
+        data_y = p2_all_pos[i][:,1]
+        data_z = p2_all_pos[i][:,0]
+        data_t = p2_all_t[i]
+        fig.add_trace(
+            go.Scatter3d(
+                x=data_x,
+                y=data_y,
+                z=data_z,
+                mode="lines",
+                opacity=1.0,
+                line=dict(color="rgb(255, 156, 0)", width=0.05),
+                customdata=data_t,
+                hovertemplate=(
+                    "<b>Time:</b> %{customdata:.1f}<br>"
+                    + "<b>X:</b> %{x:.2f}<br>"
+                    + "<b>Y:</b> %{y:.2f}<br>"
+                    + "<b>Z:</b> %{z:.2f}<extra></extra>"
+                ),
+                name="P2 Trajectories",
+                legendgroup='p2',
+                showlegend=i==0
+            )
+        )
+
+    p3_all_t = p3_all_p_t['t']
+    p3_all_pos = p3_all_p_t['pos']
+    for i in range(len(p3_all_t)):
+        data_x = p3_all_pos[i][:,2]
+        data_y = p3_all_pos[i][:,1]
+        data_z = p3_all_pos[i][:,0]
+        data_t = p3_all_t[i]
+        fig.add_trace(
+            go.Scatter3d(
+                x=data_x,
+                y=data_y,
+                z=data_z,
+                mode="lines",
+                opacity=1.0,
+                line=dict(color="rgb(0, 0, 255)", width=1),
+                customdata=data_t,
+                hovertemplate=(
+                    "<b>Time:</b> %{customdata:.1f}<br>"
+                    + "<b>X:</b> %{x:.2f}<br>"
+                    + "<b>Y:</b> %{y:.2f}<br>"
+                    + "<b>Z:</b> %{z:.2f}<extra></extra>"
+                ),
+                name="P3 Trajectories",
+                legendgroup='p3',
+                showlegend=i==0
+            )
+        )
+
+    opt_t = opt_p_t['t']
+    opt_pos = opt_p_t['pos']
+    for i in range(len(opt_t)):
+        data_x = opt_pos[i][:,2]
+        data_y = opt_pos[i][:,1]
+        data_z = opt_pos[i][:,0]
+        data_t = opt_t[i]
+        fig.add_trace(
+            go.Scatter3d(
+                x=data_x,
+                y=data_y,
+                z=data_z,
+                mode="lines",
+                opacity=1.0,
+                line=dict(color="rgb(0, 255, 0)", width=10),
+                customdata=data_t,
+                hovertemplate=(
+                    "<b>Time:</b> %{customdata:.1f}<br>"
+                    + "<b>X:</b> %{x:.2f}<br>"
+                    + "<b>Y:</b> %{y:.2f}<br>"
+                    + "<b>Z:</b> %{z:.2f}<extra></extra>"
+                ),
+                name=f"Best Trajectory (P{i+1})",
+            )
+        )
+
+    # 5. Scene Layout Adjustments
+    fig.update_layout(
+        title="Trajectory",
+        scene=dict(
+            bgcolor="rgb(250, 250, 250)",
+            aspectmode="data"
+        ),
+    )
+
+    fig.show()
