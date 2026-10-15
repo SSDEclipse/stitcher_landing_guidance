@@ -80,7 +80,7 @@ class P1Node:
         final_jerk = target_node.c_1_array.copy()
         start_accel = self.acceleration.copy()
         start_accel[0] -= planetary_body_config.body_surface_gravity
-        start_jerk = self.c_1_array + 2*self.c_2_array*t_f + 3*self.c_3_array*t_f**2
+        start_jerk = self.c_1_array + 2*self.c_2_array*self.time + 3*self.c_3_array*self.time**2
 
         coefficient_array = time_matrix_inverse @ np.array([final_accel - start_accel - start_jerk*t_f, final_jerk - start_jerk, target_node.velocity - self.velocity - start_accel * t_f - 0.5 * start_jerk*t_f**2, target_node.position - self.position - self.velocity * t_f - 1.0/2.0*start_accel*t_f**2 - 1.0/6.0*start_jerk*t_f**3])
         c_0_array = self.acceleration.copy()
@@ -865,9 +865,9 @@ tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [
 
 
 # Bellyflop case
-initial_r = np.array([500.0, 0.0, 70.0])
-initial_v = np.array([-80.0, -30.0, 0.0])
-initial_a = np.array([1.0, 0.0, 0.0])
+initial_r = np.array([500.0, 0.0, 50.0])
+initial_v = np.array([-80.0, -0.0, 0.0])
+initial_a = np.array([0.0, 0.0, -1.0])
 # initial_r = np.array([500.0, 0.0, 0.0])
 # initial_v = np.array([-150.0, 0.0, 0.0])
 # initial_a = np.array([1.0, 0.0, 0.0])
@@ -911,19 +911,19 @@ p1_thrust_state = SampledSet(0.01, 0.99, 2)
 azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
 initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
 if np.cross(initial_los_yz, initial_v)[0] > 0:
-    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
+    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
 else:
-    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
+    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 2)
 p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
 
 p2_thrust_state = SampledSet(0.01, 0.99, 2)
 if np.cross(initial_los_yz, initial_v)[0] > 0:
-    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
+    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 2)
 else:
-    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
+    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
 p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
 
-p2_time_sampled_set = SampledSet(0.1, 10, 6)
+p2_time_sampled_set = SampledSet(0.1, 10, 12)
 p2_time_to_p3_sampled_set = SampledSet(0.1, 10, 6)
 
 

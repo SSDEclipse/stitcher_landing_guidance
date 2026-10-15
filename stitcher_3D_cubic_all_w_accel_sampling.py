@@ -928,7 +928,7 @@ tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 1
 
 
 
-p1_time_sampled_set = SampledSet(1.5, 6, 6)
+p1_time_sampled_set = SampledSet(1.5, 10, 6)
 p1_thrust_state = SampledSet(0.01, 0.99, 2)
 azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
 initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
@@ -945,8 +945,8 @@ else:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
 p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
 
-p2_time_sampled_set = SampledSet(1.5, 6, 6)
-p2_time_to_p3_sampled_set = SampledSet(1.5, 6, 6)
+p2_time_sampled_set = SampledSet(1.5, 10, 6)
+p2_time_to_p3_sampled_set = SampledSet(1.5, 10, 6)
 
 
 
@@ -989,7 +989,7 @@ for t_f in np.linspace(p2_time_sampled_set.lower_bound, p2_time_sampled_set.uppe
 
 guidance_output = generate_stitcher_trajectory_cubic_accel(lander, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, p1_sampled_set_dict, p2_sampled_set_dict, process_plot=True)
 
-# guidance_output = generate_stitcher_trajectory_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
+guidance_output = generate_stitcher_trajectory_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
 
 # guidance_output = generate_stitcher_trajectory_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
 
