@@ -865,7 +865,7 @@ tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [
 
 
 # Bellyflop case
-initial_r = np.array([500.0, 0.0, 50.0])
+initial_r = np.array([500.0, 0.0, 170.0])
 initial_v = np.array([-80.0, -0.0, 0.0])
 initial_a = np.array([0.0, 0.0, -1.0])
 # initial_r = np.array([500.0, 0.0, 0.0])
@@ -873,7 +873,7 @@ initial_a = np.array([0.0, 0.0, -1.0])
 # initial_a = np.array([1.0, 0.0, 0.0])
 final_r = np.array([0.0, 0.0, 0.0])
 final_v = np.array([0.0, 0.0, 0.0])
-final_a = np.array([1.0, 0.0, -0.0])
+final_a = np.array([1.0, 0.0, 0.0])
 lander = Vehicle(150000, 135000, 6000000, 2000000, 320)
 tower_coords = np.array([[0, -20, 5], [0, 20, 5], [0, -20, 45], [0, 20, 45], [120, -20, 5], [120, 20, 5], [120, -20, 45], [120, 20, 45]])
 tower_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
@@ -923,7 +923,7 @@ else:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
 p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
 
-p2_time_sampled_set = SampledSet(0.1, 10, 12)
+p2_time_sampled_set = SampledSet(0.1, 10, 6)
 p2_time_to_p3_sampled_set = SampledSet(0.1, 10, 6)
 
 

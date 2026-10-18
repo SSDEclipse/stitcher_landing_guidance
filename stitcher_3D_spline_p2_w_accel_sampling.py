@@ -675,7 +675,6 @@ def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_s
             acc = acc_and_thrust_level[0]
             thrust_level = acc_and_thrust_level[1]
             c_0_array = start_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.wet_mass
-            c_1_array = start_node.jerk.copy()
             local_start_accel = c_0_array.copy()
             local_end_accel = acc.copy()
 
@@ -691,20 +690,27 @@ def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_s
                 rotation_vector = np.array([1.0, 0.0, 0.0])
                 rotation_angle_total = 0.0
 
-            rotation_angle_1 = 1.0/2.0 * rotation_angle_total
+            rotation_angle_1 = 1.0/3.0 * rotation_angle_total
+            rotation_angle_2 = 2.0/3.0 * rotation_angle_total
             rotation_quat_1 = np.array([np.cos(rotation_angle_1 / 2.0), rotation_vector[0] * np.sin(rotation_angle_1 / 2.0), rotation_vector[1] * np.sin(rotation_angle_1 / 2.0), rotation_vector[2] * np.sin(rotation_angle_1 / 2.0)])
-            acc_mag_1 = 1.0/2.0 * np.linalg.norm(local_start_accel) + 1.0/2.0 * np.linalg.norm(local_end_accel)
+            rotation_quat_2 = np.array([np.cos(rotation_angle_2 / 2.0), rotation_vector[0] * np.sin(rotation_angle_2 / 2.0), rotation_vector[1] * np.sin(rotation_angle_2 / 2.0), rotation_vector[2] * np.sin(rotation_angle_2 / 2.0)])
+            acc_mag_1 = 2.0/3.0 * np.linalg.norm(local_start_accel) + 1.0/3.0 * np.linalg.norm(local_end_accel)
+            acc_mag_2 = 1.0/3.0 * np.linalg.norm(local_start_accel) + 2.0/3.0 * np.linalg.norm(local_end_accel)
             acc_vec_1 = convertVectorReferenceFrame(rotation_quat_1, acc_mag_1 * local_start_accel / np.linalg.norm(local_start_accel))
+            acc_vec_2 = convertVectorReferenceFrame(rotation_quat_2, acc_mag_2 * local_start_accel / np.linalg.norm(local_start_accel))
             acc_vec_1[0] -= planetary_body_config.body_surface_gravity
+            acc_vec_2[0] -= planetary_body_config.body_surface_gravity
             global_end_accel = local_end_accel.copy()
             global_end_accel[0] -= planetary_body_config.body_surface_gravity
             c_0_array[0] -= planetary_body_config.body_surface_gravity
-            time_matrix_inverse = np.linalg.inv(np.array([[(time / 1.0)**2, (time / 1.0)**3], 
-                                                        [(time / 2.0)**2, (time / 2.0)**3]]))
+            time_matrix_inverse = np.linalg.inv(np.array([[(time / 1.0), (time / 1.0)**2, (time / 1.0)**3], 
+                                                        [(2 * time / 3.0), (2 * time / 3.0)**2, (2 * time / 3.0)**3], 
+                                                        [(time / 3.0), (time / 3.0)**2, (time / 3.0)**3]]))
 
-            coefficient_array = time_matrix_inverse @ np.array([global_end_accel - c_0_array - c_1_array * time, acc_vec_1 - c_0_array - c_1_array * time / 2.0])
-            c_2_array = coefficient_array[0]
-            c_3_array = coefficient_array[1]
+            coefficient_array = time_matrix_inverse @ np.array([global_end_accel - c_0_array, acc_vec_2 - c_0_array, acc_vec_1 - c_0_array])
+            c_1_array = coefficient_array[0]
+            c_2_array = coefficient_array[1]
+            c_3_array = coefficient_array[2]
 
             pos = start_node.position + start_node.velocity * time + 1.0/2.0 * time**2 * c_0_array + 1.0/6.0 * time**3 * c_1_array + 1.0/12.0 * time**4 * c_2_array + 1.0/20.0 * time**5 * c_3_array
             vel = start_node.velocity + c_0_array * time + 1.0/2.0*time**2 * c_1_array + 1.0/3.0*time**3 * c_2_array + 1.0/4.0*time**4 * c_3_array
@@ -774,6 +780,20 @@ def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, en
                                                             [(time_to_p3 / 3.0), (time_to_p3 / 3.0)**2, (time_to_p3 / 3.0)**3]]))
 
                 coefficient_array = time_matrix_inverse @ np.array([global_end_accel - c_0_array, acc_vec_2 - c_0_array, acc_vec_1 - c_0_array])
+                c_1_array = coefficient_array[0]
+                c_2_array = coefficient_array[1]
+                c_3_array = coefficient_array[2]
+
+                rotation_angle_1 = 1.0/2.0 * rotation_angle_total
+                rotation_quat_1 = np.array([np.cos(rotation_angle_1 / 2.0), rotation_vector[0] * np.sin(rotation_angle_1 / 2.0), rotation_vector[1] * np.sin(rotation_angle_1 / 2.0), rotation_vector[2] * np.sin(rotation_angle_1 / 2.0)])
+                acc_mag_1 = 1.0/2.0 * np.linalg.norm(local_start_accel) + 1.0/2.0 * np.linalg.norm(local_end_accel)
+                acc_vec_1 = convertVectorReferenceFrame(rotation_quat_1, acc_mag_1 * local_start_accel / np.linalg.norm(local_start_accel))
+                acc_vec_1[0] -= planetary_body_config.body_surface_gravity
+                time_matrix_inverse = np.linalg.inv(np.array([[(time_to_p3 / 1.0), (time_to_p3 / 1.0)**2, (time_to_p3 / 1.0)**3], 
+                                                            [(time_to_p3 / 2.0), (time_to_p3 / 2.0)**2, (time_to_p3 / 2.0)**3], 
+                                                            [1, 2 * time_to_p3, 3 * time_to_p3**2]]))
+
+                coefficient_array = time_matrix_inverse @ np.array([global_end_accel - c_0_array, acc_vec_1 - c_0_array, end_node.jerk.copy()])
                 c_1_array = coefficient_array[0]
                 c_2_array = coefficient_array[1]
                 c_3_array = coefficient_array[2]
@@ -1149,8 +1169,8 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
 
 
 # Bellyflop case
-initial_r = np.array([500.0, 0.0, 200.0])
-initial_v = np.array([-70.0, 0.0, 0.0])
+initial_r = np.array([500.0, 0.0, 70.0])
+initial_v = np.array([-80.0, 0.0, 0.0])
 initial_a = np.array([0.0, 0.0, -1.0])
 initial_j = np.array([0.0, 0.0, 0.0])
 # initial_r = np.array([500.0, 0.0, 0.0])
@@ -1181,7 +1201,7 @@ tower_coords = np.array([[0.0, 0.0, 0.0]])
 # tower_coords = np.array([[0.0, 0.0, 0.0]])
 # tower_coords = np.array([[0, 0, 500], [0, 0, -500], [0, 500, 500], [0, 500, -500], [1000, 0, 500], [1000, 0, -500], [1000, 500, 500], [1000, 500, -500]])
 # tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
-constraints = Constraints(position_keepout_coords=tower_coords)
+constraints = Constraints(position_keepout_coords=tower_coords, gimbal_max_rad=np.pi/180*20)
 
 tower_plotting_coords = tower_coords
 tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
@@ -1192,7 +1212,7 @@ tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 1
 
 
 
-p1_time_sampled_set = SampledSet(4, 10, 6)
+p1_time_sampled_set = SampledSet(0.1, 10, 6)
 p1_thrust_state = SampledSet(0.01, 0.99, 2)
 azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
 initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
