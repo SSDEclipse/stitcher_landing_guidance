@@ -46,6 +46,8 @@ def plot_3d_data_with_rocket(
     acc_x,
     acc_y,
     acc_z,
+    tvc_y, 
+    tvc_z,
     rocket_length=40.0,
     rocket_radius=4.5,
     thrust_scale=3,
@@ -70,6 +72,20 @@ def plot_3d_data_with_rocket(
     dir_x = acc_x / norms_safe
     dir_y = acc_y / norms_safe
     dir_z = acc_z / norms_safe
+
+    tvc_y = np.asarray(tvc_y)
+    tvc_z = np.asarray(tvc_z)
+
+    cy, sy = np.cos(tvc_y), np.sin(tvc_y)
+    cz, sz = np.cos(tvc_z), np.sin(tvc_z)
+
+    acc_x_ry = acc_x * cy + acc_z * sy
+    acc_y_ry = acc_y
+    acc_z_ry = -acc_x * sy + acc_z * cy
+
+    thrust_u = acc_x_ry * cz - acc_y_ry * sz
+    thrust_v = acc_x_ry * sz + acc_y_ry * cz
+    thrust_w = acc_z_ry
 
     # 2. Build Base Traces (Initial Frame t = 0)
     c_x, c_y, c_z, i_l, j_l, k_l = generate_cylinder_mesh(
@@ -122,15 +138,15 @@ def plot_3d_data_with_rocket(
         )
     )
 
-    # Trace 2: Animated Thrust Vector Cone
+# Trace 2: Animated Thrust Vector Cone
     fig.add_trace(
         go.Cone(
             x=[base_x[0]],
             y=[base_y[0]],
             z=[base_z[0]],
-            u=[acc_x[0]],
-            v=[acc_y[0]],
-            w=[acc_z[0]],
+            u=[thrust_u[0]],  # <-- CHANGED from acc_x[0]
+            v=[thrust_v[0]],  # <-- CHANGED from acc_y[0]
+            w=[thrust_w[0]],  # <-- CHANGED from acc_z[0]
             sizemode="raw",
             sizeref=thrust_scale,
             anchor="tip",
@@ -193,16 +209,16 @@ def plot_3d_data_with_rocket(
         frame = go.Frame(
             name=frame_name,
             data=[
-                # Update Rocket Mesh (Trace 1)
+                # Update Rocket Mesh (Trace 1 - unchanged, uses dir_x/y/z)
                 go.Mesh3d(x=cx, y=cy, z=cz, i=ci, j=cj, k=ck),
-                # Update Thrust Cone (Trace 2)
+                # Update Thrust Cone (Trace 2 - uses rotated thrust vector)
                 go.Cone(
                     x=[base_x[k]],
                     y=[base_y[k]],
                     z=[base_z[k]],
-                    u=[acc_x[k]],
-                    v=[acc_y[k]],
-                    w=[acc_z[k]],
+                    u=[thrust_u[k]],  # <-- CHANGED from acc_x[k]
+                    v=[thrust_v[k]],  # <-- CHANGED from acc_y[k]
+                    w=[thrust_w[k]],  # <-- CHANGED from acc_z[k]
                 ),
             ],
             traces=[1, 2],  # Specify trace indices to update

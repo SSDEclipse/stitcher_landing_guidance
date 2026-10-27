@@ -40,12 +40,12 @@ glideslope_max_angle = 90.0 * np.pi / 180.0  # max glideslope angle
 
 # lander = Vehicle(150000, 140000, 6000000, 2000000, 320)
 
-T = 8.2  # Time horizon
+T = 9.5  # Time horizon
 N = 100    # Number of discretization points
 dt = T / (N - 1)  # Time step
 
-r0 = np.array([[500.0], [0.0], [70.0]])
-v0 = np.array([[-80.0], [-0.0], [-0.0]])
+r0 = np.array([[500.0], [0.0], [200.0]])
+v0 = np.array([[-60.0], [-0.0], [20.0]])
 rf = np.array([[0.0], [0.0], [0.0]])
 vf = np.array([[0.0], [0.0], [0.0]])
 

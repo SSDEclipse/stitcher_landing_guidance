@@ -19,10 +19,10 @@ body_omega_rad_s = 2*np.pi/(24.622*60*60)
 body_surface_gravity = np.linalg.norm(cartesian_dynamics.gravity_acceleration())
 
 # earth
-body_mass = 5.972*10**24
+# body_mass = 5.972*10**24
 
-body_radius = 6371.0*10**3
+# body_radius = 6371.0*10**3
 
-body_omega_rad_s = 2*np.pi/(24.0*60*60)
+# body_omega_rad_s = 2*np.pi/(24.0*60*60)
 
-body_surface_gravity = np.linalg.norm(cartesian_dynamics.gravity_acceleration())
+# body_surface_gravity = np.linalg.norm(cartesian_dynamics.gravity_acceleration())

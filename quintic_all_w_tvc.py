@@ -991,7 +991,7 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
 # final_v = np.array([0.0, 0.0, 0.0])
 # final_a = np.array([1.0, 0.0, 0.0])
 # final_j = np.array([0.0, 0.0, 0.0])
-# lander = Vehicle(2000, 1700, 0.8*24000, 0.2*24000, 204)
+# lander = Vehicle(2000, 1700, 1000, 10, 0.8*24000, 0.2*24000, 204)
 
 
 # Case 2 from Lossless Convexification of Nonconvex Control
@@ -1005,7 +1005,7 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
 # final_v = np.array([0.0, 0.0, 0.0])
 # final_a = np.array([1.0, 0.0, 0.0])
 # final_j = np.array([0.0, 0.0, 0.0])
-# lander = Vehicle(2000, 1700, 0.8*24000, 0.2*24000, 204)
+# lander = Vehicle(2000, 1700, 1000, 10, 0.8*24000, 0.2*24000, 204)
 
 # Case 1 from Convex Programming Approach to Powered Descent Guidance for Mars Landing
 # initial_r = np.array([1500.0, 0.0, 2000.0])
@@ -1016,27 +1016,62 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
 # final_v = np.array([0.0, 0.0, 0.0])
 # final_a = np.array([1.0, 0.0, 0.0])
 # final_j = np.array([0.0, 0.0, 0.0])
-# lander = Vehicle(1905, 1505, 0.8*3100*6*np.cos(27*np.pi/180), 0.3*3100*6*np.cos(27*np.pi/180), 225)
+# lander = Vehicle(1905, 1505, 1000, 10, 0.8*3100*6*np.cos(27*np.pi/180), 0.3*3100*6*np.cos(27*np.pi/180), 225)
 # tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
+# # tower_coords = np.array([[0.0, 0.0, 0.0]])
 
+# p1_time_sampled_set = SampledSet(1.5, 80, 6)
+# p1_thrust_state = SampledSet(0.01, 0.99, 2)
+# azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
+# initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
+# if np.cross(initial_los_yz, initial_v)[0] > 0:
+#     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
+# else:
+#     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 2)
+# p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
+
+# p2_thrust_state = SampledSet(0.01, 0.99, 2)
+# if np.cross(initial_los_yz, initial_v)[0] > 0:
+#     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 2)
+# else:
+#     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
+# p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
+
+# p2_time_sampled_set = SampledSet(1.5, 80, 12)
+# p2_time_to_p3_sampled_set = SampledSet(1.5, 80, 6)
 
 # Bellyflop case
-initial_r = np.array([500.0, 0.0, 200.0])
+initial_r = np.array([500.0, 0.0, 0.0])
 initial_v = np.array([-80.0, 0.0, 0.0])
 initial_a = np.array([0.0, 0.0, -1.0])
 initial_j = np.array([0.0, 0.0, 0.0])
-# initial_r = np.array([500.0, 0.0, 0.0])
-# initial_v = np.array([-150.0, 0.0, 0.0])
-# initial_a = np.array([1.0, 0.0, 0.0])
 final_r = np.array([0.0, 0.0, 0.0])
 final_v = np.array([0.0, 0.0, 0.0])
-final_a = np.array([1.0, 0.0, -0.0])
+final_a = np.array([1.0, 0.0, 0.0])
 final_j = np.array([0.0, 0.0, 0.0])
 lander = Vehicle(150000, 135000, 1/12*135000*50**2, 25, 6000000, 2000000, 320)
 tower_coords = np.array([[0, -20, 5], [0, 20, 5], [0, -20, 45], [0, 20, 45], [120, -20, 5], [120, 20, 5], [120, -20, 45], [120, 20, 45]])
 tower_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
 tower_coords = np.array([[0.0, 0.0, 0.0]])
 
+p1_time_sampled_set = SampledSet(0.1, 10, 6)
+p1_thrust_state = SampledSet(0.01, 0.99, 2)
+azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
+initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
+if np.cross(initial_los_yz, initial_v)[0] > 0:
+    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 4)
+else:
+    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 4)
+p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 3)
+p2_thrust_state = SampledSet(0.01, 0.99, 2)
+if np.cross(initial_los_yz, initial_v)[0] > 0:
+    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 4)
+else:
+    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 4)
+p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 3)
+
+p2_time_sampled_set = SampledSet(1.5, 10, 12)
+p2_time_to_p3_sampled_set = SampledSet(0.1, 10, 12)
 
 # initial_r = np.array([500.0, 100.0, 200.0])
 # initial_v = np.array([-80.0, -40.0, -20.0])
@@ -1056,51 +1091,13 @@ tower_coords = np.array([[0.0, 0.0, 0.0]])
 constraints = Constraints(position_keepout_coords=tower_coords)
 
 tower_plotting_coords = tower_coords
-tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
+# tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
 
 
 
-
-
-
-
-p1_time_sampled_set = SampledSet(1.5, 10, 6)
-p1_thrust_state = SampledSet(0.01, 0.99, 2)
-azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
-initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
-if np.cross(initial_los_yz, initial_v)[0] > 0:
-    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
-else:
-    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
-p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
-
-p2_thrust_state = SampledSet(0.01, 0.99, 2)
-if np.cross(initial_los_yz, initial_v)[0] > 0:
-    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
-else:
-    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
-p2_accel_zenith_sampled_set = SampledSet(0, 20*np.pi/180, 5)
-
-p2_time_sampled_set = SampledSet(1.5, 10, 6)
-p2_time_to_p3_sampled_set = SampledSet(1.5, 10, 6)
-
-
-
-
-
-p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 4)
-p1_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
-p1_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
-
-p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 4)
-p2_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
-p2_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
 
 p1_sampled_set_dict = {
     'time': p1_time_sampled_set,
-    'pos_x': p1_pos_x_sampled_set,
-    'pos_y': p1_pos_y_sampled_set,
-    'pos_z': p1_pos_z_sampled_set,
     'thrust_state': p1_thrust_state,
     'acc_azimuth': p1_accel_azimuth_sampled_set,
     'acc_zenith': p1_accel_zenith_sampled_set
@@ -1109,9 +1106,6 @@ p1_sampled_set_dict = {
 p2_sampled_set_dict = {
     'time': p2_time_sampled_set,
     'time_to_p3': p2_time_to_p3_sampled_set,
-    'pos_x': p2_pos_x_sampled_set,
-    'pos_y': p2_pos_y_sampled_set,
-    'pos_z': p2_pos_z_sampled_set,
     'thrust_state': p2_thrust_state,
     'acc_azimuth': p2_accel_azimuth_sampled_set,
     'acc_zenith': p2_accel_zenith_sampled_set

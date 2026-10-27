@@ -54,7 +54,7 @@ class StartNode:
         self.velocity = input_velocity
 
 class P1Node:
-    def __init__(self, position, velocity, acceleration, c_0_array, c_1_array, c_2_array, c_3_array, time):
+    def __init__(self, position, velocity, acceleration, c_0_array, c_1_array, c_2_array, c_3_array, end_opposite_accel_mag, time):
         self.position = position
         self.velocity = velocity
         self.acceleration = acceleration
@@ -62,6 +62,7 @@ class P1Node:
         self.c_1_array = c_1_array
         self.c_2_array = c_2_array
         self.c_3_array = c_3_array
+        self.end_opposite_accel_mag = end_opposite_accel_mag
         self.time = time
         self.target_edges = []
         self.parent_edges = []
@@ -76,17 +77,19 @@ class P1Node:
         time_matrix_inverse = time_matrix_inverses_dict[t_f]
         # need to remove gravity accel from self.accel and target.accels first # coefficient_array = time_matrix_inverse @ np.array([target_node.acceleration - self.acceleration, target_node.velocity - self.velocity - self.acceleration * t_f, target_node.position - self.position - self.velocity * t_f - 1.0/2.0*self.acceleration*t_f**2]).T
         target_accel_propagation = target_node.acceleration.copy()
+        # target_accel_propagation = target_node.start_opposite_accel_mag * target_accel_propagation.copy() / np.linalg.norm(target_accel_propagation.copy())
         target_accel_propagation[0] -= planetary_body_config.body_surface_gravity
         self_accel_propagation = self.acceleration.copy()
+        self_accel_propagation = self.end_opposite_accel_mag * self_accel_propagation.copy() / np.linalg.norm(self_accel_propagation.copy())
         self_accel_propagation[0] -= planetary_body_config.body_surface_gravity
 
         coefficient_array = time_matrix_inverse @ np.array([target_accel_propagation - self_accel_propagation, target_node.velocity - self.velocity - self_accel_propagation * t_f, target_node.position - self.position - self.velocity * t_f - 1.0/2.0*self_accel_propagation*t_f**2])
-        c_0_array = self.acceleration.copy()
+        c_0_array = self_accel_propagation + np.array([planetary_body_config.body_surface_gravity, 0.0, 0.0])
         c_1_array = coefficient_array[0]
         c_2_array = coefficient_array[1]
         c_3_array = coefficient_array[2]
 
-        if np.linalg.norm(np.abs((c_0_array + c_1_array*t_f + c_2_array*t_f**2 + c_3_array*t_f**3) - target_node.acceleration)) > 0.001:
+        if np.linalg.norm(np.cross(c_0_array + c_1_array*t_f + c_2_array*t_f**2 + c_3_array*t_f**3, target_node.acceleration)) > 0.001:
             breakpoint()
 
         new_edge = Edge(self, target_node, c_0_array, c_1_array, c_2_array, c_3_array, t_f)
@@ -101,7 +104,7 @@ class P1Node:
         self.acceleration = input_acceleration
 
 class P2Node:
-    def __init__(self, position, velocity, acceleration, c_0_array, c_1_array, c_2_array, c_3_array, time, time_to_p3):
+    def __init__(self, position, velocity, acceleration, c_0_array, c_1_array, c_2_array, c_3_array, start_opposite_accel_mag, time, time_to_p3):
         self.position = position
         self.velocity = velocity
         self.acceleration = acceleration
@@ -109,6 +112,7 @@ class P2Node:
         self.c_1_array = c_1_array
         self.c_2_array = c_2_array
         self.c_3_array = c_3_array
+        self.start_opposite_accel_mag = start_opposite_accel_mag
         self.time = time
         self.time_to_p3 = time_to_p3
         self.target_edges = []
@@ -438,6 +442,14 @@ def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_s
             local_start_accel = c_0_array.copy()
             local_end_accel = acc.copy()
 
+            if thrust_level > 0.5:
+                end_opposite_thrust_magnitude = (1 - thrust_level)*vehicle.max_thrust + thrust_level*vehicle.min_thrust
+            else:
+                end_opposite_thrust_magnitude = thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust
+            end_opposite_mass = vehicle.wet_mass - (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) * time / (vehicle.v_e)
+            end_opposite_accel_mag = end_opposite_thrust_magnitude / end_opposite_mass
+
+
             if np.linalg.norm(np.cross(local_start_accel, local_end_accel)) > 1e-6:
                 rotation_vector = np.cross(local_start_accel, local_end_accel) / np.linalg.norm(np.cross(local_start_accel, local_end_accel))
                 if np.dot(local_start_accel, local_end_accel) / (np.linalg.norm(local_start_accel) * np.linalg.norm(local_end_accel)) < -1.0:
@@ -476,7 +488,7 @@ def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_s
             vel = start_node.velocity + c_0_array * time + 1.0/2.0*time**2 * c_1_array + 1.0/3.0*time**3 * c_2_array + 1.0/4.0*time**4 * c_3_array
             c_0_array[0] += planetary_body_config.body_surface_gravity
             local_end_accel = c_0_array + c_1_array*time + c_2_array*time**2 + c_3_array*time**3
-            phase_1_nodes.append(P1Node(pos, vel, local_end_accel, c_0_array, c_1_array, c_2_array, c_3_array, time))
+            phase_1_nodes.append(P1Node(pos, vel, local_end_accel, c_0_array, c_1_array, c_2_array, c_3_array, end_opposite_accel_mag, time))
     return phase_1_nodes
 
 def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, end_node, thrust_level_sampled_state, acc_azimuth_sampled_set, acc_zenith_sampled_set):
@@ -508,6 +520,14 @@ def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, en
                 else:
                     local_end_accel = end_node.acceleration_dir.copy() * (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) / vehicle.dry_mass
 
+                if thrust_level > 0.5:
+                    start_opposite_thrust_magnitude = (1 - thrust_level)*vehicle.max_thrust + thrust_level*vehicle.min_thrust
+                    start_opposite_mass = vehicle.wet_mass - start_opposite_thrust_magnitude/vehicle.v_e * time_to_p3
+                else:
+                    start_opposite_thrust_magnitude = thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust
+                    start_opposite_thrust_magnitude = (1 - thrust_level)*vehicle.max_thrust + thrust_level*vehicle.min_thrust
+                    start_opposite_mass = vehicle.dry_mass + start_opposite_thrust_magnitude/vehicle.v_e * time_to_p3
+                start_opposite_accel_mag = start_opposite_thrust_magnitude / start_opposite_mass
 
                 local_start_accel = c_0_array.copy()
 
@@ -547,7 +567,7 @@ def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, en
                 vel = end_node.velocity - c_0_array*time_to_p3 - 1.0/2.0*c_1_array*time_to_p3**2 - 1.0/3.0*c_2_array*time_to_p3**3 - 1.0/4.0*c_3_array*time_to_p3**4
                 pos = end_node.position - vel * time_to_p3 - 1.0/2.0 * time_to_p3**2 * c_0_array - 1.0/6.0 * time_to_p3**3 * c_1_array - 1.0/12.0 * time_to_p3**4 * c_2_array - 1.0/20.0 * time_to_p3**5 * c_3_array
                 c_0_array[0] += planetary_body_config.body_surface_gravity
-                phase_2_nodes.append(P2Node(pos, vel, c_0_array, c_0_array, c_1_array, c_2_array, c_3_array, time, time_to_p3))
+                phase_2_nodes.append(P2Node(pos, vel, c_0_array, c_0_array, c_1_array, c_2_array, c_3_array, start_opposite_accel_mag, time, time_to_p3))
 
     return phase_2_nodes
 
@@ -850,8 +870,6 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
     return output
 
 
-
-
 # Case 1 from Lossless Convexification of Nonconvex Control
 # Bound and Pointing Constraints of the Soft
 # Landing Optimal Control Problem
@@ -876,18 +894,38 @@ final_a = np.array([1.0, 0.0, 0.0])
 lander = Vehicle(2000, 1700, 0.8*24000, 0.2*24000, 204)
 
 # Case 1 from Convex Programming Approach to Powered Descent Guidance for Mars Landing
-initial_r = np.array([1500.0, 0.0, 2000.0])
-initial_v = np.array([-75.0, 0.0, 100.0])
-initial_a = np.array([1.0, 0.0, -1.0])
-final_r = np.array([0.0, 0.0, 0.0])
-final_v = np.array([0.0, 0.0, 0.0])
-final_a = np.array([1.0, 0.0, 0.0])
-lander = Vehicle(1905, 1505, 0.8*3100*6*np.cos(27*np.pi/180), 0.3*3100*6*np.cos(27*np.pi/180), 225)
-tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
+# initial_r = np.array([1500.0, 0.0, 2000.0])
+# initial_v = np.array([-75.0, 0.0, 100.0])
+# initial_a = np.array([1.0, 0.0, -1.0])
+# final_r = np.array([0.0, 0.0, 0.0])
+# final_v = np.array([0.0, 0.0, 0.0])
+# final_a = np.array([1.0, 0.0, 0.0])
+# lander = Vehicle(1905, 1505, 0.8*3100*6*np.cos(27*np.pi/180), 0.3*3100*6*np.cos(27*np.pi/180), 225)
+# tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
+# # tower_coords = np.array([[0.0, 0.0, 0.0]])
 
+# p1_time_sampled_set = SampledSet(1.5, 80, 6)
+# p1_thrust_state = SampledSet(0.01, 0.99, 2)
+# azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
+# initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
+# if np.cross(initial_los_yz, initial_v)[0] > 0:
+#     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
+# else:
+#     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 2)
+# p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
+
+# p2_thrust_state = SampledSet(0.01, 0.99, 2)
+# if np.cross(initial_los_yz, initial_v)[0] > 0:
+#     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 2)
+# else:
+#     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
+# p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
+
+# p2_time_sampled_set = SampledSet(1.5, 80, 12)
+# p2_time_to_p3_sampled_set = SampledSet(1.5, 20, 6)
 
 # Bellyflop case
-initial_r = np.array([500.0, 0.0, 70.0])
+initial_r = np.array([500.0, 0.0, 0.0])
 initial_v = np.array([-80.0, 0.0, 0.0])
 initial_a = np.array([0.0, 0.0, -1.0])
 # initial_r = np.array([500.0, 0.0, 0.0])
@@ -901,18 +939,25 @@ tower_coords = np.array([[0, -20, 5], [0, 20, 5], [0, -20, 45], [0, 20, 45], [12
 tower_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
 tower_coords = np.array([[0.0, 0.0, 0.0]])
 
+p1_time_sampled_set = SampledSet(1.5, 10, 6)
+p1_thrust_state = SampledSet(0.01, 0.99, 2)
+azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
+initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
+if np.cross(initial_los_yz, initial_v)[0] > 0:
+    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 4)
+else:
+    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 4)
+p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 3)
+p2_thrust_state = SampledSet(0.01, 0.99, 2)
+if np.cross(initial_los_yz, initial_v)[0] > 0:
+    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 4)
+else:
+    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 4)
+p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 3)
 
-# initial_r = np.array([500.0, 100.0, 200.0])
-# initial_v = np.array([-80.0, -40.0, -20.0])
-# initial_a = np.array([10.0, 8.04, -3.66])
-# initial_r = np.array([500.0, 0.0, 100.0])
-# initial_v = np.array([-80.0, 0.0, 0.0])
-# initial_a = np.array([0.0, 0.0, -1.0])
-# final_r = np.array([0.0, 0.0, 0.0])
-# final_v = np.array([0.0, 0.0, 0.0])
-# final_a = np.array([1.0, -0.0, 0.0])
-# initial_a = initial_a / np.linalg.norm(initial_a)
-# final_a = final_a / np.linalg.norm(final_a)
+p2_time_sampled_set = SampledSet(1.5, 10, 6)
+p2_time_to_p3_sampled_set = SampledSet(1.5, 10, 6)
+
 
 # tower_coords = np.array([[0.0, 0.0, 0.0]])
 # tower_coords = np.array([[0, 0, 500], [0, 0, -500], [0, 500, 500], [0, 500, -500], [1000, 0, 500], [1000, 0, -500], [1000, 500, 500], [1000, 500, -500]])
@@ -920,7 +965,6 @@ tower_coords = np.array([[0.0, 0.0, 0.0]])
 constraints = Constraints(position_keepout_coords=tower_coords)
 
 tower_plotting_coords = tower_coords
-tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
 
 
 
@@ -928,43 +972,13 @@ tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 1
 
 
 
-p1_time_sampled_set = SampledSet(1.5, 10, 6)
-p1_thrust_state = SampledSet(0.01, 0.99, 2)
-azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
-initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
-if np.cross(initial_los_yz, initial_v)[0] > 0:
-    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
-else:
-    p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
-p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
-
-p2_thrust_state = SampledSet(0.01, 0.99, 2)
-if np.cross(initial_los_yz, initial_v)[0] > 0:
-    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 5)
-else:
-    p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 5)
-p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
-
-p2_time_sampled_set = SampledSet(1.5, 10, 6)
-p2_time_to_p3_sampled_set = SampledSet(1.5, 10, 6)
 
 
 
 
-
-p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 4)
-p1_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
-p1_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
-
-p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 4)
-p2_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
-p2_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
 
 p1_sampled_set_dict = {
     'time': p1_time_sampled_set,
-    'pos_x': p1_pos_x_sampled_set,
-    'pos_y': p1_pos_y_sampled_set,
-    'pos_z': p1_pos_z_sampled_set,
     'thrust_state': p1_thrust_state,
     'acc_azimuth': p1_accel_azimuth_sampled_set,
     'acc_zenith': p1_accel_zenith_sampled_set
@@ -973,9 +987,6 @@ p1_sampled_set_dict = {
 p2_sampled_set_dict = {
     'time': p2_time_sampled_set,
     'time_to_p3': p2_time_to_p3_sampled_set,
-    'pos_x': p2_pos_x_sampled_set,
-    'pos_y': p2_pos_y_sampled_set,
-    'pos_z': p2_pos_z_sampled_set,
     'thrust_state': p2_thrust_state,
     'acc_azimuth': p2_accel_azimuth_sampled_set,
     'acc_zenith': p2_accel_zenith_sampled_set

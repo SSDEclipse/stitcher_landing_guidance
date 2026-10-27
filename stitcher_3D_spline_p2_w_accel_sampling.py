@@ -58,7 +58,7 @@ class StartNode:
         self.velocity = input_velocity
 
 class P1Node:
-    def __init__(self, position, velocity, acceleration, c_0_array, c_1_array, c_2_array, c_3_array, time):
+    def __init__(self, position, velocity, acceleration, c_0_array, c_1_array, c_2_array, c_3_array, end_opposite_accel_mag, time):
         self.position = position
         self.velocity = velocity
         self.acceleration = acceleration
@@ -66,10 +66,22 @@ class P1Node:
         self.c_1_array = c_1_array
         self.c_2_array = c_2_array
         self.c_3_array = c_3_array
+        self.end_opposite_accel_mag = end_opposite_accel_mag
         self.time = time
         self.target_edges = []
         self.parent_edges = []
-    
+        self.node_accel_performance_metric = None
+
+    def preprocess_edge(self, target_node, time_array, accel_lower_bound, accel_upper_bound):
+        node_accel_performance_metric = 0
+        for t_f in time_array:
+            c_0_array = 6.0 / t_f**2 * (target_node.position - self.position - self.velocity*t_f) - 2.0 / t_f * (target_node.velocity - self.velocity)
+            c_1_array = -12.0 / t_f**3 * (target_node.position - self.position - self.velocity*t_f) + 6.0 / t_f**2 * (target_node.velocity - self.velocity)
+            c_0_array[0] += planetary_body_config.body_surface_gravity
+            accel_mag_midpoint = 0.5*(accel_lower_bound + accel_upper_bound)
+            node_accel_performance_metric += (np.linalg.norm(c_0_array) - accel_mag_midpoint)**2 + (np.linalg.norm(c_0_array + c_1_array*t_f) - accel_mag_midpoint)**2
+        self.node_accel_performance_metric = node_accel_performance_metric
+
     
     def create_and_append_edge(self, target_node):
         t_f = target_node.time
@@ -85,11 +97,12 @@ class P1Node:
         final_accel[0] -= planetary_body_config.body_surface_gravity
         final_jerk = target_node.c_1_array.copy()
         start_accel = self.acceleration.copy()
+        start_accel = self.end_opposite_accel_mag * start_accel.copy() / np.linalg.norm(start_accel.copy())
         start_accel[0] -= planetary_body_config.body_surface_gravity
         start_jerk = self.c_1_array + 2*self.c_2_array*self.time + 3*self.c_3_array*self.time**2
 
         coefficient_array = time_matrix_inverse @ np.array([final_accel, final_jerk, start_accel + start_jerk*t_12, start_jerk, target_node.velocity - self.velocity - start_accel*t_12 - 1.0/2.0*t_12**2*start_jerk, target_node.position - self.position - self.velocity*t_f - start_accel*t_12*tau_f - 1.0/2.0*start_jerk*t_12**2*tau_f - 1.0/2.0*start_accel*t_12**2 - 1.0/6.0*start_jerk*t_12**3])
-        c_0_1_array = self.acceleration.copy()
+        c_0_1_array = start_accel + np.array([planetary_body_config.body_surface_gravity, 0.0, 0.0])
         c_1_1_array = start_jerk
         c_2_1_array = coefficient_array[0]
         c_3_1_array = coefficient_array[1]
@@ -129,7 +142,19 @@ class P2Node:
         self.time_to_p3 = time_to_p3
         self.target_edges = []
         self.parent_edges = []
-    
+        self.node_accel_performance_metric = None
+
+    def preprocess_edge(self, start_node, time_array, accel_lower_bound, accel_upper_bound):
+        node_accel_performance_metric = 0
+        for t_f in time_array:
+            c_0_array = 6.0 / t_f**2 * (self.position - start_node.position - start_node.velocity*t_f) - 2.0 / t_f * (self.velocity - start_node.velocity)
+            c_1_array = -12.0 / t_f**3 * (self.position - start_node.position - start_node.velocity*t_f) + 6.0 / t_f**2 * (self.velocity - start_node.velocity)
+            c_0_array[0] += planetary_body_config.body_surface_gravity
+            accel_mag_midpoint = 0.5*(accel_lower_bound + accel_upper_bound)
+            node_accel_performance_metric += (np.linalg.norm(c_0_array) - accel_mag_midpoint)**2 + (np.linalg.norm(c_0_array + c_1_array*t_f) - accel_mag_midpoint)**2
+        self.node_accel_performance_metric = node_accel_performance_metric
+
+
     def create_and_append_backward_edge(self, target_node):
         t_f = self.time_to_p3
         self.update_node_acceleration(self.c_0_array)
@@ -269,7 +294,10 @@ class Edge:
             u_hat = u.copy()/u_norm
             u_dot = (self.c_1_array + 2*self.c_2_array*t + 3*self.c_3_array*t**2).T
             u_dot_hat = u_dot/u_norm - u * (u.T @ u_dot / u_norm**3)
-            n_hat = np.cross(constants_and_helpers.e1.T, u_hat) / np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat))
+            if np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat)) > 1e-12:
+                n_hat = np.cross(constants_and_helpers.e1.T, u_hat) / np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat))
+            else:
+                n_hat = np.array([0.0, 0.0, 0.0])
             theta = np.arccos(u_hat[0])
             n_hat_x = np.array([[0, -n_hat[2], n_hat[1]],
                                 [n_hat[2], 0, -n_hat[0]],
@@ -366,14 +394,14 @@ class SplineEdge:
     def check_position_keepout(self, constraints):
 
         pos_time_1 = np.linspace(0.0, self.t_12, self.num_eval_points//2)
-        pos_check_1, vel_check_1, _, _, _ = compute_trajectory_states(pos_time_1, self.c_0_1_array, self.c_1_1_array, self.c_2_1_array, self.c_3_1_array, self.parent_node.position, self.parent_node.velocity, planetary_body_config.body_surface_gravity)
+        pos_check_1, vel_check_1, _ = compute_trajectory_states(pos_time_1, self.c_0_1_array, self.c_1_1_array, self.c_2_1_array, self.c_3_1_array, self.parent_node.position, self.parent_node.velocity, planetary_body_config.body_surface_gravity, compute_w=False)
         pos_check_1_x, pos_check_1_y, pos_check_1_z = pos_check_1[:, 0], pos_check_1[:, 1], pos_check_1[:, 2]
         for time_idx in range(len(pos_time_1)):
             if pos_check_1_x[time_idx] < constraints.position_keepout_max_x and pos_check_1_x[time_idx] > constraints.position_keepout_min_x:
                 if (pos_check_1_y[time_idx] < constraints.position_keepout_max_y and pos_check_1_y[time_idx] > constraints.position_keepout_min_y) and (pos_check_1_z[time_idx] < constraints.position_keepout_max_z and pos_check_1_z[time_idx] > constraints.position_keepout_min_z):
                     return False
         pos_time_2 = np.linspace(0, self.t_f-self.t_12, self.num_eval_points - self.num_eval_points//2)
-        pos_check_2, _, _, _, _ = compute_trajectory_states(pos_time_2, self.c_0_2_array, self.c_1_2_array, self.c_2_2_array, self.c_3_2_array, pos_check_1[-1], vel_check_1[-1], planetary_body_config.body_surface_gravity)
+        pos_check_2, _, _ = compute_trajectory_states(pos_time_2, self.c_0_2_array, self.c_1_2_array, self.c_2_2_array, self.c_3_2_array, pos_check_1[-1], vel_check_1[-1], planetary_body_config.body_surface_gravity, compute_w=False)
         pos_check_2_x, pos_check_2_y, pos_check_2_z = pos_check_2[:, 0], pos_check_2[:, 1], pos_check_2[:, 2]
         for time_idx in range(len(pos_time_2)):
             if pos_check_2_x[time_idx] < constraints.position_keepout_max_x and pos_check_2_x[time_idx] > constraints.position_keepout_min_x:
@@ -389,7 +417,10 @@ class SplineEdge:
             u_hat = u.copy()/np.linalg.norm(u)
             u_dot = (self.c_1_1_array + 2*self.c_2_1_array*t + 3*self.c_3_1_array*t**2).T
             u_dot_hat = u_dot/u_norm - u * (u.T @ u_dot / u_norm**3)
-            n_hat = np.cross(constants_and_helpers.e1.T, u_hat) / np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat))
+            if np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat)) > 1e-12:
+                n_hat = np.cross(constants_and_helpers.e1.T, u_hat) / np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat))
+            else:
+                n_hat = np.array([0.0, 0.0, 0.0])       
             theta = np.arccos(u_hat[0])
             n_hat_x = np.array([[0, -n_hat[2], n_hat[1]],
                                 [n_hat[2], 0, -n_hat[0]],
@@ -497,7 +528,7 @@ class OutputData:
 
 import numpy as np
 
-def compute_trajectory_states(t, c0, c1, c2, c3, r0, v0, g):
+def compute_trajectory_states(t, c0, c1, c2, c3, r0, v0, g, compute_w=True):
 
     t = np.asarray(t)
     c0 = np.asarray(c0)
@@ -528,40 +559,45 @@ def compute_trajectory_states(t, c0, c1, c2, c3, r0, v0, g):
         + (c1 * t_col) 
         + (c2 * t_col**2) 
         + (c3 * t_col**3))
-    
-    w_vec = []
-    w_dot_vec = []
-    for time in t_col:
-        u = (c0 + c1*time + c2*time**2 + c3*time**3).T
-        u_norm = np.linalg.norm(u)
-        u_hat = u.copy()/np.linalg.norm(u)
-        u_dot = (c1 + 2*c2*time + 3*c3*time**2).T
-        u_dot_hat = u_dot/np.linalg.norm(u) - u * (u.T @ u_dot / np.linalg.norm(u)**3)
-        n_hat = np.cross(constants_and_helpers.e1.T, u_hat) / np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat))
-        theta = np.arccos(u_hat[0])
-        n_hat_x = np.array([[0, -n_hat[2], n_hat[1]],
-                            [n_hat[2], 0, -n_hat[0]],
-                            [-n_hat[1], n_hat[0], 0]])
-        rot_mat = np.identity(3) + np.sin(theta)*n_hat_x + (1 - np.cos(theta))*np.linalg.matrix_power(n_hat_x, 2)
-        w = rot_mat.T @ u_dot_hat
-        w_y = -w[2]
-        w_z = w[1]
-        w = np.array([0.0, w_y, w_z])
-        u_doubledot = (2*c2 + 6*c3*time).T
-        u_doubledot_hat = (u_norm*u_doubledot - u_dot*(u.T @ u_dot) / u_norm) / u_norm**2 - ((u.T @ u_dot * u_dot + u.T @ u_doubledot * u + u_dot.T @ u_dot * u)/u_norm**3 - 3*(u.T @ u_dot)**2 * u / u_norm**5)
-        w_x = np.array([[0, -w[2], w[1]],
-                        [w[2], 0, 0],
-                        [-w[1], 0, 0]])
-        w_dot = rot_mat.T @ u_doubledot_hat - w_x @ rot_mat.T @ u_dot_hat
-        w_dot_y = -w_dot[2]
-        w_dot_z = w_dot[1]
-        w_dot = np.array([0.0, w_dot_y, w_dot_z])
-        w_vec.append(w)
-        w_dot_vec.append(w_dot)
 
-    w_vec = np.asarray(w_vec)
-    w_dot_vec = np.asarray(w_dot_vec)
-    return r_vec, v_vec, u_vec, w_vec, w_dot_vec
+    if compute_w:
+        w_vec = []
+        w_dot_vec = []
+        for time in t_col:
+            u = (c0 + c1*time + c2*time**2 + c3*time**3).T
+            u_norm = np.linalg.norm(u)
+            u_hat = u.copy()/np.linalg.norm(u)
+            u_dot = (c1 + 2*c2*time + 3*c3*time**2).T
+            u_dot_hat = u_dot/np.linalg.norm(u) - u * (u.T @ u_dot / np.linalg.norm(u)**3)
+            if np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat)) > 1e-12:
+                n_hat = np.cross(constants_and_helpers.e1.T, u_hat) / np.linalg.norm(np.cross(constants_and_helpers.e1.T, u_hat))
+            else:
+                n_hat = np.array([0.0, 0.0, 0.0])
+            theta = np.arccos(u_hat[0])
+            n_hat_x = np.array([[0, -n_hat[2], n_hat[1]],
+                                [n_hat[2], 0, -n_hat[0]],
+                                [-n_hat[1], n_hat[0], 0]])
+            rot_mat = np.identity(3) + np.sin(theta)*n_hat_x + (1 - np.cos(theta))*np.linalg.matrix_power(n_hat_x, 2)
+            w = rot_mat.T @ u_dot_hat
+            w_y = -w[2]
+            w_z = w[1]
+            w = np.array([0.0, w_y, w_z])
+            u_doubledot = (2*c2 + 6*c3*time).T
+            u_doubledot_hat = (u_norm*u_doubledot - u_dot*(u.T @ u_dot) / u_norm) / u_norm**2 - ((u.T @ u_dot * u_dot + u.T @ u_doubledot * u + u_dot.T @ u_dot * u)/u_norm**3 - 3*(u.T @ u_dot)**2 * u / u_norm**5)
+            w_x = np.array([[0, -w[2], w[1]],
+                            [w[2], 0, 0],
+                            [-w[1], 0, 0]])
+            w_dot = rot_mat.T @ u_doubledot_hat - w_x @ rot_mat.T @ u_dot_hat
+            w_dot_y = -w_dot[2]
+            w_dot_z = w_dot[1]
+            w_dot = np.array([0.0, w_dot_y, w_dot_z])
+            w_vec.append(w)
+            w_dot_vec.append(w_dot)
+
+        w_vec = np.asarray(w_vec)
+        w_dot_vec = np.asarray(w_dot_vec)
+        return r_vec, v_vec, u_vec, w_vec, w_dot_vec
+    return r_vec, v_vec, u_vec
 
 def get_nearest_array_neighbors(input_array, input_value):
     idx = np.searchsorted(input_array, input_value)
@@ -678,6 +714,14 @@ def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_s
             local_start_accel = c_0_array.copy()
             local_end_accel = acc.copy()
 
+            if thrust_level > 0.5:
+                end_opposite_thrust_magnitude = (1 - thrust_level)*vehicle.max_thrust + thrust_level*vehicle.min_thrust
+            else:
+                end_opposite_thrust_magnitude = thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust
+            end_opposite_thrust_magnitude = thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust
+            end_opposite_mass = vehicle.wet_mass - (thrust_level*vehicle.max_thrust + (1-thrust_level)*vehicle.min_thrust) * time / (vehicle.v_e)
+            end_opposite_accel_mag = end_opposite_thrust_magnitude / end_opposite_mass
+
             if np.linalg.norm(np.cross(local_start_accel, local_end_accel)) > 1e-6:
                 rotation_vector = np.cross(local_start_accel, local_end_accel) / np.linalg.norm(np.cross(local_start_accel, local_end_accel))
                 if np.dot(local_start_accel, local_end_accel) / (np.linalg.norm(local_start_accel) * np.linalg.norm(local_end_accel)) < -1.0:
@@ -716,7 +760,7 @@ def generate_phase_1_nodes(vehicle, time_sampled_set, start_node, thrust_level_s
             vel = start_node.velocity + c_0_array * time + 1.0/2.0*time**2 * c_1_array + 1.0/3.0*time**3 * c_2_array + 1.0/4.0*time**4 * c_3_array
             c_0_array[0] += planetary_body_config.body_surface_gravity
             local_end_accel = c_0_array + c_1_array*time + c_2_array*time**2 + c_3_array*time**3
-            phase_1_nodes.append(P1Node(pos, vel, local_end_accel, c_0_array, c_1_array, c_2_array, c_3_array, time))
+            phase_1_nodes.append(P1Node(pos, vel, local_end_accel, c_0_array, c_1_array, c_2_array, c_3_array, end_opposite_accel_mag, time))
     return phase_1_nodes
 
 def generate_phase_2_nodes(vehicle, time_sampled_set, time_to_p3_sampled_set, end_node, thrust_level_sampled_state, acc_azimuth_sampled_set, acc_zenith_sampled_set):
@@ -814,7 +858,7 @@ def generate_phase_3_nodes(target_r, target_v, final_a, final_j):
     return phase_3_nodes
  
 
-def prune_edges(input_mass_array, input_inertia, input_moment_arm, input_v_e, thrust_lower_bound, thrust_upper_bound, input_edges, mode, input_nodes=None, constraints=None, mass_consumed_flag=True):
+def prune_edges(input_mass_array, input_inertia, input_moment_arm, input_v_e, thrust_lower_bound, thrust_upper_bound, input_edges, mode, input_nodes=None, constraints=None, mass_consumed_flag=True, check_thrust=True):
 
     input_edges_copy = input_edges[:]
     for edg_idx in range(len(input_edges_copy)):
@@ -822,20 +866,21 @@ def prune_edges(input_mass_array, input_inertia, input_moment_arm, input_v_e, th
         prune_edge_flag = False
 
         # check all constraints here
-        if not edge.check_cubic_accel_thrust_bounds(input_mass_array[edg_idx], input_v_e, thrust_lower_bound, thrust_upper_bound, mass_consumed_flag=mass_consumed_flag):
+        if check_thrust and not edge.check_cubic_accel_thrust_bounds(input_mass_array[edg_idx], input_v_e, thrust_lower_bound, thrust_upper_bound, mass_consumed_flag=mass_consumed_flag):
             prune_edge_flag = True
         if not prune_edge_flag and constraints.glideslope_max_angle is not None:
             pass
         if not prune_edge_flag and constraints.thrust_max_angle is not None:
             pass
         if not prune_edge_flag and constraints.interphase_max_angle is not None:
-            if len(edge.parent_node.parent_edges) > 0 and len(edge.target_node.target_edges) > 0:
-                start_interphase_angle = np.arccos(np.dot(edge.c_0_array, edge.parent_node.acceleration) / (np.linalg.norm(edge.c_0_array)*np.linalg.norm(edge.parent_node.acceleration)))
-                if start_interphase_angle > constraints.interphase_max_angle:
-                    prune_edge_flag = True
-                end_interphase_angle = np.arccos(np.dot(edge.c_0_array + edge.c_1_array*edge.t_f, edge.target_node.acceleration) / (np.linalg.norm(edge.c_0_array + edge.c_1_array*edge.t_f)*np.linalg.norm(edge.target_node.acceleration)))
-                if end_interphase_angle > constraints.interphase_max_angle:
-                    prune_edge_flag = True
+            pass
+            # if len(edge.parent_node.parent_edges) > 0 and len(edge.target_node.target_edges) > 0:
+            #     start_interphase_angle = np.arccos(np.dot(edge.c_0_array, edge.parent_node.acceleration) / (np.linalg.norm(edge.c_0_array)*np.linalg.norm(edge.parent_node.acceleration)))
+            #     if start_interphase_angle > constraints.interphase_max_angle:
+            #         prune_edge_flag = True
+            #     end_interphase_angle = np.arccos(np.dot(edge.c_0_array + edge.c_1_array*edge.t_f, edge.target_node.acceleration) / (np.linalg.norm(edge.c_0_array + edge.c_1_array*edge.t_f)*np.linalg.norm(edge.target_node.acceleration)))
+            #     if end_interphase_angle > constraints.interphase_max_angle:
+            #         prune_edge_flag = True
         if not prune_edge_flag and constraints.position_keepout_coords is not None:
             if not edge.check_position_keepout(constraints):
                 prune_edge_flag = True
@@ -857,6 +902,20 @@ def prune_edges(input_mass_array, input_inertia, input_moment_arm, input_v_e, th
                 if len(edge.parent_node.target_edges) == 0:
                     input_nodes.remove(edge.parent_node)
 
+def preprocess_edges(input_nodes, percentile):
+
+    node_preprocess_costs = []
+    for node in input_nodes:
+        node_preprocess_costs.append(node.node_accel_performance_metric)
+    preprocess_threshold = np.percentile(node_preprocess_costs, percentile)
+
+    nodes_to_prune = []
+    for node in input_nodes:
+        if node.node_accel_performance_metric > preprocess_threshold:
+            nodes_to_prune.append(node)
+
+    for node in nodes_to_prune:
+        input_nodes.remove(node)
 
 
 def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, initial_a, initial_j, final_r, final_v, final_a, final_j, constraints, p1_sampled_set_dict, p2_sampled_set_dict, process_plot=False):
@@ -868,7 +927,32 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
     phase_1_nodes = generate_phase_1_nodes(vehicle, p1_sampled_set_dict['time'], start_node, p1_sampled_set_dict['thrust_state'], p1_sampled_set_dict['acc_azimuth'], p1_sampled_set_dict['acc_zenith'])
     # phase_1_nodes = generate_phase_1_nodes(p1_sampled_set_dict['time'], p1_sampled_set_dict['pos_x'], p1_sampled_set_dict['pos_y'], p1_sampled_set_dict['pos_z'])
 
+    # create phase 3 nodes
+    phase_3_nodes = generate_phase_3_nodes(final_r, final_v, final_a, final_j)
+
+    # create phase 2 nodes
+    phase_2_nodes = generate_phase_2_nodes(vehicle, p2_sampled_set_dict['time'], p2_sampled_set_dict['time_to_p3'], phase_3_nodes[0], p2_sampled_set_dict['thrust_state'], p2_sampled_set_dict['acc_azimuth'], p2_sampled_set_dict['acc_zenith'])
+
+    p1_preprocessing_time_array = []
+    for t1 in np.linspace(p2_sampled_set_dict['time'].lower_bound, p2_sampled_set_dict['time'].upper_bound, p2_sampled_set_dict['time'].num_points):
+        for t2 in np.linspace(p2_sampled_set_dict['time_to_p3'].lower_bound, p2_sampled_set_dict['time_to_p3'].upper_bound, p2_sampled_set_dict['time_to_p3'].num_points):
+            p1_preprocessing_time_array.append(t1+t2)
+
+    p2_preprocessing_time_array = []
+    for t1 in np.linspace(p1_sampled_set_dict['time'].lower_bound, p1_sampled_set_dict['time'].upper_bound, p1_sampled_set_dict['time'].num_points):
+        for t2 in np.linspace(p2_sampled_set_dict['time'].lower_bound, p2_sampled_set_dict['time'].upper_bound, p2_sampled_set_dict['time'].num_points):
+            p2_preprocessing_time_array.append(t1+t2)
+
     last_solver_checkpoint_time = time.time()
+
+    for phase_1_node in phase_1_nodes:
+        phase_1_node.preprocess_edge(phase_3_nodes[0], p1_preprocessing_time_array, vehicle.min_thrust / vehicle.wet_mass, vehicle.max_thrust / vehicle.dry_mass)
+    preprocess_edges(phase_1_nodes, 50)
+
+    for phase_2_node in phase_2_nodes:
+        phase_2_node.preprocess_edge(start_node, p2_preprocessing_time_array, vehicle.min_thrust / vehicle.wet_mass, vehicle.max_thrust / vehicle.dry_mass)
+    preprocess_edges(phase_2_nodes, 50)
+
     # connect start and phase 1 nodes with edges
     for phase_1_node in phase_1_nodes:
         start_node.create_and_append_edge(phase_1_node)
@@ -877,11 +961,11 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
     last_solver_checkpoint_time = time.time()
 
     if process_plot:
-        plot_output_num_edges = 50
+        plot_output_num_edges = min(50, len(start_node.target_edges))
         plot_output_p1_edges = random.sample(start_node.target_edges, plot_output_num_edges)
 
-    # prune phase 1 edges and nodes that violate constraints
-    prune_edges([vehicle.wet_mass]*len(start_node.target_edges), vehicle.inertia, vehicle.moment_arm, vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust, start_node.target_edges, 'forward', phase_1_nodes, constraints)
+    # prune phase 1 edges and nodes that violate constraints    
+    prune_edges([vehicle.wet_mass]*len(start_node.target_edges), vehicle.inertia, vehicle.moment_arm, vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust, start_node.target_edges, 'forward', phase_1_nodes, Constraints(position_keepout_coords=constraints.position_keepout_coords, w_max_rad_s=40*np.pi/180))
     total_p1_edges = 0
     for phase_1_edge in start_node.target_edges:
         total_p1_edges += 1
@@ -898,11 +982,6 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
 
     T_p1_edge_cost_pruning = time.time() - last_solver_checkpoint_time
 
-    # create phase 3 nodes
-    phase_3_nodes = generate_phase_3_nodes(final_r, final_v, final_a, final_j)
-
-    # create phase 2 nodes
-    phase_2_nodes = generate_phase_2_nodes(vehicle, p2_sampled_set_dict['time'], p2_sampled_set_dict['time_to_p3'], phase_3_nodes[0], p2_sampled_set_dict['thrust_state'], p2_sampled_set_dict['acc_azimuth'], p2_sampled_set_dict['acc_zenith'])
     # phase_2_nodes = generate_phase_2_nodes(p2_sampled_set_dict['time'], p2_sampled_set_dict['time_to_p3'], p2_sampled_set_dict['pos_x'], p2_sampled_set_dict['pos_y'], p2_sampled_set_dict['pos_z'])
 
 
@@ -919,13 +998,13 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
     T_p3_edge_generation = time.time() - last_solver_checkpoint_time
 
     if process_plot:
-        plot_output_num_edges = 50
+        plot_output_num_edges = min(50, len(phase_3_node.parent_edges))
         plot_output_p3_edges = random.sample(phase_3_node.parent_edges, plot_output_num_edges)
 
     # prune phase 3 edges that violate constraints based on worst case mass
     last_solver_checkpoint_time = time.time()
-    # for phase_3_node in phase_3_nodes:
-    #     prune_edges([vehicle.dry_mass]*len(phase_3_node.parent_edges), vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust, phase_3_node.parent_edges, 'backward', phase_2_nodes, constraints, mass_consumed_flag=False)
+    for phase_3_node in phase_3_nodes:
+        prune_edges([vehicle.dry_mass]*len(phase_3_node.parent_edges), vehicle.inertia, vehicle.moment_arm, vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust, phase_3_node.parent_edges, 'backward', phase_2_nodes, Constraints(position_keepout_coords=constraints.position_keepout_coords, w_max_rad_s=40*np.pi/180), mass_consumed_flag=False, check_thrust=False)
     total_p3_edges = 0
     for phase_3_edge in phase_3_nodes[0].parent_edges:
         total_p3_edges += 1
@@ -1028,7 +1107,7 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
             # need to have this be a prune_edges call instead
             if target_edge.check_cubic_accel_thrust_bounds(current_edge_start_mass, vehicle.v_e, vehicle.min_thrust, vehicle.max_thrust):
                 if target_edge.check_position_keepout(constraints):
-                    if target_edge.check_attitude_dynamics_bounds(constraints, vehicle.inertia, vehicle.moment_arm):
+                    # if target_edge.check_attitude_dynamics_bounds(constraints, vehicle.inertia, vehicle.moment_arm):
                         valid_p3_edges.append(target_edge)
                         target_edge.compute_cubic_accel_mass_consumed(current_edge_start_mass, vehicle.v_e)
                         p3_t_int = target_edge.thrust_integral
@@ -1055,6 +1134,8 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
                         #     optimal_edge_1 = copy.copy(optimal_node_1.parent_edges[0])
     T_p3_edge_cost_pruning = time.time() - last_solver_checkpoint_time
 
+    optimal_tf = optimal_edge_1.t_f + optimal_edge_2.t_f + optimal_edge_3.t_f
+
     p1_acc_azimuth = np.arctan2(optimal_node_1.acceleration[1], optimal_node_1.acceleration[2])
     if not (p1_sampled_set_dict['acc_azimuth'].lower_bound <= p1_acc_azimuth and p1_acc_azimuth <= p1_sampled_set_dict['acc_azimuth'].upper_bound):
         if p1_acc_azimuth > p1_sampled_set_dict['acc_azimuth'].upper_bound:
@@ -1063,8 +1144,9 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
             p1_acc_azimuth += 2*np.pi
     p1_acc_zenith = np.arccos(np.dot(optimal_node_1.acceleration, np.array([1.0, 0.0, 0.0])) / np.linalg.norm(optimal_node_1.acceleration))
     new_p1_time_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p1_sampled_set_dict['time'].lower_bound, p1_sampled_set_dict['time'].upper_bound, p1_sampled_set_dict['time'].num_points), optimal_edge_1.t_f), p1_sampled_set_dict['time'].num_points)
+    # new_p1_time_sampled_set = SampledSet(p1_sampled_set_dict['time'].lower_bound, 0.8*optimal_tf, p1_sampled_set_dict['time'].num_points)
     new_p1_thrust_state_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['thrust_state'].lower_bound, p1_sampled_set_dict['thrust_state'].upper_bound, p1_sampled_set_dict['thrust_state'].num_points), optimal_node_1.position[0]), p1_sampled_set_dict['thrust_state'].num_points)
-    new_p1_acc_azimuth_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p1_sampled_set_dict['acc_azimuth'].lower_bound, p1_sampled_set_dict['acc_azimuth'].upper_bound, p1_sampled_set_dict['acc_azimuth'].num_points), p1_acc_azimuth), p1_sampled_set_dict['acc_azimuth'].num_points)
+    new_p1_acc_azimuth_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p1_sampled_set_dict['acc_azimuth'].lower_bound, p1_sampled_set_dict['acc_azimuth'].upper_bound, p1_sampled_set_dict['acc_azimuth'].num_points), p1_acc_azimuth), p1_sampled_set_dict['acc_azimuth'].num_points)
     new_p1_acc_zenith_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p1_sampled_set_dict['acc_zenith'].lower_bound, p1_sampled_set_dict['acc_zenith'].upper_bound, p1_sampled_set_dict['acc_zenith'].num_points), p1_acc_zenith), p1_sampled_set_dict['acc_zenith'].num_points)
     # new_p1_acc_azimuth_sampled_set = SampledSet(p1_acc_azimuth, p1_acc_azimuth, 2)
 
@@ -1078,10 +1160,15 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
     p2_acc_zenith = np.arccos(np.dot(optimal_node_2.acceleration, np.array([1.0, 0.0, 0.0])) / np.linalg.norm(optimal_node_2.acceleration))
     new_p2_time_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p2_sampled_set_dict['time'].lower_bound, p2_sampled_set_dict['time'].upper_bound, p2_sampled_set_dict['time'].num_points), optimal_edge_2.t_f), p2_sampled_set_dict['time'].num_points)
     new_p2_time_to_p3_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p2_sampled_set_dict['time_to_p3'].lower_bound, p2_sampled_set_dict['time_to_p3'].upper_bound, p2_sampled_set_dict['time_to_p3'].num_points), optimal_edge_3.t_f), p2_sampled_set_dict['time_to_p3'].num_points)
+    # new_p2_time_sampled_set = SampledSet(p2_sampled_set_dict['time'].lower_bound, 0.8*optimal_tf, p2_sampled_set_dict['time'].num_points)
+    # new_p2_time_to_p3_sampled_set = SampledSet(p2_sampled_set_dict['time_to_p3'].lower_bound, 0.8*optimal_tf, p2_sampled_set_dict['time_to_p3'].num_points)
     new_p2_thrust_state_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['thrust_state'].lower_bound, p2_sampled_set_dict['thrust_state'].upper_bound, p2_sampled_set_dict['thrust_state'].num_points), optimal_node_2.position[0]), p2_sampled_set_dict['thrust_state'].num_points)
-    new_p2_acc_azimuth_sampled_set = SampledSet(*get_nearest_array_neighbors(np.linspace(p2_sampled_set_dict['acc_azimuth'].lower_bound, p2_sampled_set_dict['acc_azimuth'].upper_bound, p2_sampled_set_dict['acc_azimuth'].num_points), p2_acc_azimuth), p2_sampled_set_dict['acc_azimuth'].num_points)
+    new_p2_acc_azimuth_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p2_sampled_set_dict['acc_azimuth'].lower_bound, p2_sampled_set_dict['acc_azimuth'].upper_bound, p2_sampled_set_dict['acc_azimuth'].num_points), p2_acc_azimuth), p2_sampled_set_dict['acc_azimuth'].num_points)
     new_p2_acc_zenith_sampled_set = SampledSet(*get_new_sampled_set_bounds(np.linspace(p2_sampled_set_dict['acc_zenith'].lower_bound, p2_sampled_set_dict['acc_zenith'].upper_bound, p2_sampled_set_dict['acc_zenith'].num_points), p2_acc_zenith), p2_sampled_set_dict['acc_zenith'].num_points)
     # new_p2_acc_azimuth_sampled_set = SampledSet(p2_acc_azimuth, p2_acc_azimuth, 2)
+
+    # test1 = get_new_sampled_set_bounds(np.linspace(p2_sampled_set_dict['time_to_p3'].lower_bound, p2_sampled_set_dict['time_to_p3'].upper_bound, p2_sampled_set_dict['time_to_p3'].num_points), optimal_edge_3.t_f)
+    # breakpoint()
 
     for t_f in np.linspace(new_p2_time_sampled_set.lower_bound, new_p2_time_sampled_set.upper_bound, new_p2_time_sampled_set.num_points):
         t_12 = t_f/2.0
@@ -1139,7 +1226,7 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
 # final_v = np.array([0.0, 0.0, 0.0])
 # final_a = np.array([1.0, 0.0, 0.0])
 # final_j = np.array([0.0, 0.0, 0.0])
-# lander = Vehicle(2000, 1700, 0.8*24000, 0.2*24000, 204)
+# lander = Vehicle(2000, 1700, 1000, 10, 0.8*24000, 0.2*24000, 204)
 
 
 # Case 2 from Lossless Convexification of Nonconvex Control
@@ -1153,66 +1240,22 @@ def generate_stitcher_trajectory_cubic_accel(vehicle, initial_r, initial_v, init
 # final_v = np.array([0.0, 0.0, 0.0])
 # final_a = np.array([1.0, 0.0, 0.0])
 # final_j = np.array([0.0, 0.0, 0.0])
-# lander = Vehicle(2000, 1700, 0.8*24000, 0.2*24000, 204)
+# lander = Vehicle(2000, 1700, 1000, 10, 0.8*24000, 0.2*24000, 204)
 
 # Case 1 from Convex Programming Approach to Powered Descent Guidance for Mars Landing
-# initial_r = np.array([1500.0, 0.0, 2000.0])
-# initial_v = np.array([-75.0, 0.0, 100.0])
-# initial_a = np.array([1.0, 0.0, -1.0])
-# initial_j = np.array([0.0, 0.0, 0.0])
-# final_r = np.array([0.0, 0.0, 0.0])
-# final_v = np.array([0.0, 0.0, 0.0])
-# final_a = np.array([1.0, 0.0, 0.0])
-# final_j = np.array([0.0, 0.0, 0.0])
-# lander = Vehicle(1905, 1505, 0.8*3100*6*np.cos(27*np.pi/180), 0.3*3100*6*np.cos(27*np.pi/180), 225)
-# tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
-
-
-# Bellyflop case
-initial_r = np.array([500.0, 0.0, 70.0])
-initial_v = np.array([-80.0, 0.0, 0.0])
-initial_a = np.array([0.0, 0.0, -1.0])
+initial_r = np.array([1500.0, 0.0, 2000.0])
+initial_v = np.array([-75.0, 0.0, 100.0])
+initial_a = np.array([1.0, 0.0, -1.0])
 initial_j = np.array([0.0, 0.0, 0.0])
-# initial_r = np.array([500.0, 0.0, 0.0])
-# initial_v = np.array([-150.0, 0.0, 0.0])
-# initial_a = np.array([1.0, 0.0, 0.0])
 final_r = np.array([0.0, 0.0, 0.0])
 final_v = np.array([0.0, 0.0, 0.0])
-final_a = np.array([1.0, 0.0, -0.0])
+final_a = np.array([1.0, 0.0, 1.0])
 final_j = np.array([0.0, 0.0, 0.0])
-lander = Vehicle(150000, 135000, 1/12*135000*50**2, 25, 6000000, 2000000, 320)
-tower_coords = np.array([[0, -20, 5], [0, 20, 5], [0, -20, 45], [0, 20, 45], [120, -20, 5], [120, 20, 5], [120, -20, 45], [120, 20, 45]])
-tower_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
+lander = Vehicle(1905, 1505, 1000, 10, 0.8*3100*6*np.cos(27*np.pi/180), 0.3*3100*6*np.cos(27*np.pi/180), 225)
+tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
 tower_coords = np.array([[0.0, 0.0, 0.0]])
 
-
-# initial_r = np.array([500.0, 100.0, 200.0])
-# initial_v = np.array([-80.0, -40.0, -20.0])
-# initial_a = np.array([10.0, 8.04, -3.66])
-# initial_r = np.array([500.0, 0.0, 100.0])
-# initial_v = np.array([-80.0, 0.0, 0.0])
-# initial_a = np.array([0.0, 0.0, -1.0])
-# final_r = np.array([0.0, 0.0, 0.0])
-# final_v = np.array([0.0, 0.0, 0.0])
-# final_a = np.array([1.0, -0.0, 0.0])
-# initial_a = initial_a / np.linalg.norm(initial_a)
-# final_a = final_a / np.linalg.norm(final_a)
-
-# tower_coords = np.array([[0.0, 0.0, 0.0]])
-# tower_coords = np.array([[0, 0, 500], [0, 0, -500], [0, 500, 500], [0, 500, -500], [1000, 0, 500], [1000, 0, -500], [1000, 500, 500], [1000, 500, -500]])
-# tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
-constraints = Constraints(position_keepout_coords=tower_coords, gimbal_max_rad=np.pi/180*20)
-
-tower_plotting_coords = tower_coords
-tower_plotting_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
-
-
-
-
-
-
-
-p1_time_sampled_set = SampledSet(0.1, 10, 6)
+p1_time_sampled_set = SampledSet(0.1, 80, 6)
 p1_thrust_state = SampledSet(0.01, 0.99, 2)
 azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
 initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
@@ -1220,35 +1263,71 @@ if np.cross(initial_los_yz, initial_v)[0] > 0:
     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
 else:
     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 2)
-p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
+p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 3)
 
-p2_thrust_state = SampledSet(0.01, 0.99, 2)
+p2_thrust_state = SampledSet(0.99, 0.99, 2)
 if np.cross(initial_los_yz, initial_v)[0] > 0:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 2)
 else:
     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 2)
-p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 5)
+p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 3)
 
-p2_time_sampled_set = SampledSet(1.5, 10, 6)
-p2_time_to_p3_sampled_set = SampledSet(0.1, 10, 6)
+p2_time_sampled_set = SampledSet(1.5, 80, 6)
+p2_time_to_p3_sampled_set = SampledSet(1.5, 80, 6)
+
+# Bellyflop case
+# initial_r = np.array([500.0, 0.0, 100.0])
+# initial_v = np.array([-80.0, 0.0, 0.0])
+# initial_a = np.array([0.0, 0.0, -1.0])
+# initial_j = np.array([0.0, 0.0, 0.0])
+# final_r = np.array([0.0, 0.0, 0.0])
+# final_v = np.array([0.0, 0.0, 0.0])
+# final_a = np.array([1.0, 0.0, 0.0])
+# final_j = np.array([0.0, 0.0, 0.0])
+# lander = Vehicle(150000, 135000, 1/12*135000*50**2, 25, 6000000, 2000000, 320)
+# tower_coords = np.array([[0, -20, 5], [0, 20, 5], [0, -20, 45], [0, 20, 45], [120, -20, 5], [120, 20, 5], [120, -20, 45], [120, 20, 45]])
+# tower_coords = np.array([[0, -10, 15], [0, 10, 15], [0, -10, 35], [0, 10, 35], [120, -10, 15], [120, 10, 15], [120, -10, 35], [120, 10, 35]])
+# tower_coords = np.array([[0.0, 0.0, 0.0]])
+
+# p1_time_sampled_set = SampledSet(0.1, 10, 6)
+# p1_thrust_state = SampledSet(0.01, 0.99, 2)
+# azimuth_v_0 = np.arctan2(initial_v[1], initial_v[2])
+# initial_los_yz = np.array([final_r[2] - initial_r[2], final_r[1] - initial_r[1]])
+# if np.cross(initial_los_yz, initial_v)[0] > 0:
+#     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 4)
+# else:
+#     p1_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 4)
+# p1_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 4)
+# p2_thrust_state = SampledSet(0.01, 0.99, 2)
+# if np.cross(initial_los_yz, initial_v)[0] > 0:
+#     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0, azimuth_v_0 + np.pi, 4)
+# else:
+#     p2_accel_azimuth_sampled_set = SampledSet(azimuth_v_0 - np.pi, azimuth_v_0, 4)
+# p2_accel_zenith_sampled_set = SampledSet(0, 60*np.pi/180, 4)
+
+# p2_time_sampled_set = SampledSet(1.5, 10, 6)
+# p2_time_to_p3_sampled_set = SampledSet(0.1, 10, 6)
+
+
+# tower_coords = np.array([[0.0, 0.0, 0.0]])
+# tower_coords = np.array([[0, 0, 500], [0, 0, -500], [0, 500, 500], [0, 500, -500], [1000, 0, 500], [1000, 0, -500], [1000, 500, 500], [1000, 500, -500]])
+# tower_coords = np.array([[0, 5000, 5000], [0, 5000, -5000], [0, -5000, -5000], [0, -5000, 5000], [-1000, 0, 500], [-1000, 5000, 5000], [-1000, 5000, -5000], [-1000, -5000, -5000], [-1000, -5000, 5000]])
+constraints = Constraints(position_keepout_coords=tower_coords)
+
+tower_plotting_coords = tower_coords
 
 
 
 
 
-p1_pos_x_sampled_set = SampledSet(0.51*initial_r[0], initial_r[0], 4)
-p1_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
-p1_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
 
-p2_pos_x_sampled_set = SampledSet(0.01*initial_r[0], 0.50*initial_r[0], 4)
-p2_pos_y_sampled_set = SampledSet(-50, 50.0, 5)
-p2_pos_z_sampled_set = SampledSet(-50, 50.0, 5)
+
+
+
+
 
 p1_sampled_set_dict = {
     'time': p1_time_sampled_set,
-    'pos_x': p1_pos_x_sampled_set,
-    'pos_y': p1_pos_y_sampled_set,
-    'pos_z': p1_pos_z_sampled_set,
     'thrust_state': p1_thrust_state,
     'acc_azimuth': p1_accel_azimuth_sampled_set,
     'acc_zenith': p1_accel_zenith_sampled_set
@@ -1257,9 +1336,6 @@ p1_sampled_set_dict = {
 p2_sampled_set_dict = {
     'time': p2_time_sampled_set,
     'time_to_p3': p2_time_to_p3_sampled_set,
-    'pos_x': p2_pos_x_sampled_set,
-    'pos_y': p2_pos_y_sampled_set,
-    'pos_z': p2_pos_z_sampled_set,
     'thrust_state': p2_thrust_state,
     'acc_azimuth': p2_accel_azimuth_sampled_set,
     'acc_zenith': p2_accel_zenith_sampled_set
@@ -1282,9 +1358,9 @@ for t_f in np.linspace(p2_time_sampled_set.lower_bound, p2_time_sampled_set.uppe
 
 guidance_output = generate_stitcher_trajectory_cubic_accel(lander, initial_r, initial_v, initial_a, initial_j, final_r, final_v, final_a, final_j, constraints, p1_sampled_set_dict, p2_sampled_set_dict, process_plot=True)
 
-guidance_output = generate_stitcher_trajectory_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, initial_j, final_r, final_v, final_a, final_j, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
+# guidance_output = generate_stitcher_trajectory_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, initial_j, final_r, final_v, final_a, final_j, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
 
-# guidance_output = generate_stitcher_trajectory_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
+# guidance_output = generate_stitcher_trajectory_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, initial_j, final_r, final_v, final_a, final_j, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
 
 # guidance_output = generate_stitcher_trajectory_cubic_accel(guidance_output.vehicle_copy, initial_r, initial_v, initial_a, final_r, final_v, final_a, constraints, guidance_output.p1_nearest_neighbors_dict, guidance_output.p2_nearest_neighbors_dict, process_plot=True)
 
@@ -1296,7 +1372,7 @@ print(min(guidance_output.end_masses))
 print(len(guidance_output.end_masses))
 
 total_time = guidance_output.optimal_edge_1.t_f + guidance_output.optimal_edge_2.t_f +guidance_output.optimal_edge_3.t_f
-num_total_points_plotting = 1000
+num_total_points_plotting = 200
 num_p1_points_plotting = int(guidance_output.optimal_edge_1.t_f/total_time * num_total_points_plotting)
 num_p2_points_plotting = int(guidance_output.optimal_edge_2.t_f/total_time * num_total_points_plotting)
 num_p3_points_plotting = num_total_points_plotting - num_p1_points_plotting - num_p2_points_plotting
@@ -1400,6 +1476,8 @@ for i in range(1, len(t_combined)):
 mass_combined = np.asarray(mass_combined)
 thrust_combined = np.asarray(thrust_combined)
 
+tvc_y_combined = lander.inertia*w_dot_y_combined / (thrust_combined * lander.moment_arm)
+tvc_z_combined = lander.inertia*w_dot_z_combined / (thrust_combined * lander.moment_arm)
 
 
 if guidance_output.process_plot_outputs is not None:
@@ -1503,9 +1581,9 @@ for key in [*guidance_output.solver_durations]:
 
 
 
-plotting_functions.plot_3d_data_with_rocket(t_combined, r_z_combined, r_y_combined, r_x_combined, t_combined[::60], u_z_combined[::60], u_y_combined[::60], u_x_combined[::60], rocket_length=40, rocket_radius=4.5, thrust_scale=1.5, polygon_coords=tower_plotting_coords)
+plotting_functions.plot_3d_data_with_rocket(t_combined, r_z_combined, r_y_combined, r_x_combined, t_combined[::10], u_z_combined[::10], u_y_combined[::10], u_x_combined[::10], rocket_length=40, rocket_radius=4.5, thrust_scale=1.5, polygon_coords=tower_plotting_coords)
 
-animation_functions.plot_3d_data_with_rocket(t_combined, r_z_combined, r_y_combined, r_x_combined, t_combined, u_z_combined, u_y_combined, u_x_combined, rocket_length=40, rocket_radius=4.5, thrust_scale=1.5, polygon_coords=tower_plotting_coords, fps=15)
+animation_functions.plot_3d_data_with_rocket(t_combined, r_z_combined, r_y_combined, r_x_combined, t_combined, u_z_combined, u_y_combined, u_x_combined, tvc_y_combined, tvc_z_combined, rocket_length=40, rocket_radius=4.5, thrust_scale=1.5, polygon_coords=tower_plotting_coords, fps=15)
 
 plotting_functions.plot_2d_data([t_combined, t_combined, t_combined], [r_x_combined, r_y_combined, r_z_combined], ['rx', 'ry', 'rz'], 'Sampling-based Position vs Time', 'Time (s)', 'Position (m)')
 
@@ -1519,9 +1597,9 @@ else:
     plotting_functions.plot_2d_data([t_combined, t_combined], [180/np.pi*np.sqrt(np.square(w_x_combined) + np.square(w_y_combined) + np.square(w_z_combined))], ['Combined Rate'], 'Angular Velocity vs Time', 'Time (s)', 'Rate (deg/s)')
 
 if constraints.gimbal_max_rad is not None:
-    plotting_functions.plot_2d_data([t_combined, t_combined, t_combined, t_combined], [180/np.pi*lander.inertia*w_dot_y_combined / (thrust_combined * lander.moment_arm), 180/np.pi*lander.inertia*w_dot_z_combined / (thrust_combined * lander.moment_arm), [180/np.pi*constraints.gimbal_max_rad]*len(t_combined), [-180/np.pi*constraints.gimbal_max_rad]*len(t_combined)], ['TVC Y', 'TVC Z', 'TVC Upper Bound', 'TVC Lower Bound'], 'TVC vs Time', 'Time (s)', 'TVC (deg)', line_dict=[dict(), dict(), dict(color='red', dash='dash'), dict(color='red', dash='dash')])
+    plotting_functions.plot_2d_data([t_combined, t_combined, t_combined, t_combined], [180/np.pi*tvc_y_combined, 180/np.pi*tvc_z_combined, [180/np.pi*constraints.gimbal_max_rad]*len(t_combined), [-180/np.pi*constraints.gimbal_max_rad]*len(t_combined)], ['TVC Y', 'TVC Z', 'TVC Upper Bound', 'TVC Lower Bound'], 'TVC vs Time', 'Time (s)', 'TVC (deg)', line_dict=[dict(), dict(), dict(color='red', dash='dash'), dict(color='red', dash='dash')])
 else:
-    plotting_functions.plot_2d_data([t_combined, t_combined, t_combined, t_combined], [180/np.pi*lander.inertia*w_dot_y_combined / (thrust_combined * lander.moment_arm), 180/np.pi*lander.inertia*w_dot_z_combined / (thrust_combined * lander.moment_arm)], ['TVC Y', 'TVC Z'], 'TVC vs Time', 'Time (s)', 'TVC (deg)')
+    plotting_functions.plot_2d_data([t_combined, t_combined, t_combined, t_combined], [180/np.pi*tvc_y_combined, 180/np.pi*tvc_z_combined], ['TVC Y', 'TVC Z'], 'TVC vs Time', 'Time (s)', 'TVC (deg)')
 
 plotting_functions.plot_2d_data([t_combined, t_combined, t_combined], [thrust_combined * 1.0/lander.max_thrust, [lander.min_thrust * 1.0/lander.max_thrust]*len(t_combined), [1.0]*len(t_combined)], ['Throttle', 'Throttle lower bound', 'Throttle upper bound'], 'Throttle vs time', 'Time (s)', 'Throttle', line_dict=[dict(), dict(color='red', dash='dash'), dict(color='red', dash='dash')])
 
